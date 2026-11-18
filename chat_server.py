@@ -188,15 +188,17 @@ PAGE = r"""<!doctype html>
   .empty{color:var(--muted); text-align:center; margin:auto 0; font-size:12.5px; line-height:1.9}
   form{
     display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line);
-    background:rgba(17,19,26,.96);
+    background:rgba(17,19,26,.96); align-items:flex-end;
   }
-  input{
+  textarea{
     flex:1; min-width:0; padding:11px 14px; border-radius:10px;
     border:1px solid var(--line); background:#0e1016; color:var(--ink);
-    font:inherit; outline:none;
+    font:inherit; line-height:1.55; outline:none; resize:none; display:block;
+    overflow-y:hidden; max-height:132px;   /* 五行封顶，超出内部滚动 */
   }
-  input:focus{border-color:rgba(242,182,187,.6)}
+  textarea:focus{border-color:rgba(242,182,187,.6)}
   button.send{
+    height:44px; flex:none;
     padding:0 18px; border-radius:10px; cursor:pointer; font:inherit;
     border:1px solid rgba(242,182,187,.55); background:rgba(242,182,187,.18); color:var(--ink);
   }
@@ -263,7 +265,7 @@ PAGE = r"""<!doctype html>
 <header>
   <div class="h-left">
     <b>Kokona Chat</b>
-    <span class="tag">B</span>
+    <span class="tag">秋月不会解梦</span>
   </div>
   <div class="h-right">
     <span id="status">连接中…</span>
@@ -273,10 +275,10 @@ PAGE = r"""<!doctype html>
   </div>
 </header>
 
-<main id="log"><p class="empty" id="empty">这个频道还没有消息<br>把 WS 地址交给 A 端就能开聊</p></main>
+<main id="log"><p class="empty" id="empty">这个频道还没有消息<br>把 WS 地址交给心夏就能开聊</p></main>
 
 <form id="form">
-  <input id="input" autocomplete="off" placeholder="说点什么…" enterkeyhint="send">
+  <textarea id="input" rows="1" autocomplete="off" placeholder="说点什么…（Enter 发送 · Shift+Enter 换行）" enterkeyhint="send"></textarea>
   <button class="send" type="submit">发送</button>
 </form>
 
@@ -293,6 +295,12 @@ PAGE = r"""<!doctype html>
   var qs = new URLSearchParams(location.search);
   var TOKEN = qs.get('token') || 'sukikokona1212';
   var RESERVED = ['ws','stream','send','channels','history','health'];
+
+  // 两个角色在界面上的显示名
+  var NAME_A = '心夏';           // WebSocket 那一侧
+  var NAME_B = '秋月不会解梦';     // 浏览器这一侧
+  var SHORT_B = '秋月';          // 面板等窄处用的简称
+  var MAX_INPUT_H = 132;         // 输入框最多撑到五行
 
   var ch = qs.get('ch') || '1';
   var m = location.pathname.match(/^\/chat\/([^\/]+)\/?$/);
@@ -321,7 +329,7 @@ PAGE = r"""<!doctype html>
     var meta = document.createElement('span');
     meta.className = 'meta';
     var t = new Date(msg.ts);
-    meta.textContent = (msg.from === 'B' ? 'B · 我' : 'A') + ' · ' + t.toLocaleTimeString('zh-CN', {hour12:false});
+    meta.textContent = (msg.from === 'B' ? NAME_B : NAME_A) + ' · ' + t.toLocaleTimeString('zh-CN', {hour12:false});
     var body = document.createElement('span');
     body.textContent = msg.text;
     d.appendChild(meta); d.appendChild(body); log.appendChild(d);
@@ -329,20 +337,40 @@ PAGE = r"""<!doctype html>
   }
 
   var es = new EventSource('/chat/stream?token=' + encodeURIComponent(TOKEN) + '&ch=' + encodeURIComponent(ch));
-  es.onopen = function(){ statusEl.textContent = '已连接 · 你是 B'; statusEl.classList.add('on'); };
+  es.onopen = function(){ statusEl.textContent = '已连接 · ' + NAME_B; statusEl.classList.add('on'); };
   es.onerror = function(){ statusEl.textContent = '重连中…'; statusEl.classList.remove('on'); };
   es.onmessage = function(e){ try { add(JSON.parse(e.data)); } catch(_){} };
 
+  // ---- 输入框：随内容长高，最多五行，之后内部滚动 ----
+  function autoGrow(){
+    input.style.height = 'auto';
+    var need = input.scrollHeight;
+    input.style.height = Math.min(need, MAX_INPUT_H) + 'px';
+    input.style.overflowY = need > MAX_INPUT_H ? 'auto' : 'hidden';
+  }
+  input.addEventListener('input', autoGrow);
+
+  // Enter 发送，Shift+Enter 换行；中文输入法选词的回车不算
+  input.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      document.getElementById('form').requestSubmit();
+    }
+  });
+
+  // ---- 发送 ----
   document.getElementById('form').addEventListener('submit', function(e){
     e.preventDefault();
     var text = input.value.trim();
     if (!text) return;
     input.value = '';
+    autoGrow();
     fetch('/chat/send?token=' + encodeURIComponent(TOKEN) + '&ch=' + encodeURIComponent(ch), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({text: text})
     }).catch(function(){ statusEl.textContent = '发送失败'; });
+    input.focus();
   });
 
   function placePanel(){
@@ -383,7 +411,7 @@ PAGE = r"""<!doctype html>
           var path = c.id === '1' ? '/chat/' : '/chat/' + esc(c.id) + '/';
           return '<div class="ch-item' + (c.id === ch ? ' active' : '') + '" data-id="' + esc(c.id) + '">'
             + '<span>' + esc(c.name) + '</span>'
-            + '<small>' + path + ' · A' + c.ws + ' B' + c.sse + '</small>'
+            + '<small>' + path + ' · ' + NAME_A + c.ws + ' ' + SHORT_B + c.sse + '</small>'
             + '</div>';
         }).join('');
         var items = chList.querySelectorAll('.ch-item');
@@ -460,10 +488,11 @@ PAGE = r"""<!doctype html>
       });
   });
 
-  window.addEventListener('pageshow', function(){ input.focus(); });
+  window.addEventListener('pageshow', function(){ input.focus(); autoGrow(); });
 
   // 首屏就拉一次频道信息，让按钮和标题立刻显示真实频道名
   loadChannels();
+  autoGrow();
 })();
 </script>
 </body>
