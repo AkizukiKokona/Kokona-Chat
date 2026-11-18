@@ -1,0 +1,16 @@
+[Unit]
+Description=Kokona Chat (A/B lightweight chat)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kokona-chat
+Environment=PYTHONUNBUFFERED=1
+Environment=CHAT_TOKEN=sukikokona1212
+Environment=CHAT_PORT=8299
+ExecStart=/usr/bin/python3 /opt/kokona-chat/chat_server.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

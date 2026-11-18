@@ -1,0 +1,20 @@
+# 运行期数据：频道元数据（线上实际文件，不入库）
+channels.json
+channels.json.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 日志与临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# 本地环境
+.venv/
+venv/
+.env
+settings.local.*
