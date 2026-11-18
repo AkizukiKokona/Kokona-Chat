@@ -12,7 +12,7 @@
 
 现成的聊天 UI 都太重了 —— 要登录、要建房间、要数据库、要撤回编辑已读。这里只需要「一条管道」：
 
-- **不需要登录**：页面打开即可用，接口靠 token 区分
+- **不需要注册**：一个共享 token 就够，页面登录一次就记住
 - **不需要社交功能**：没有撤回、删除、编辑、已读、引用
 - **消息落盘但不建库**：每频道一个追加日志，重启不丢
 
@@ -65,7 +65,13 @@ tail -f /opt/kokona-chat/data/ch-1.jsonl
 python3 chat_server.py
 ```
 
-默认监听 `127.0.0.1:8299`，然后用浏览器打开 `http://127.0.0.1:8299/chat/`。
+默认监听 `127.0.0.1:8299`，然后用浏览器打开 `http://127.0.0.1:8299/chat/`，首次会要求输入 token（默认 `sukikokona1212`），登录一次后记在 cookie 里，一年内不用再输。
+
+也可以直接把 token 拼在地址上，服务端会种好 cookie 再跳回干净 URL：
+
+```
+http://127.0.0.1:8299/chat/?token=sukikokona1212
+```
 
 环境变量：
 
@@ -105,8 +111,9 @@ python3 chat_server.py
 所有接口除页面本身外都需要 `token`（query、`X-Token` 头、`Authorization: Bearer` 三选一）。
 
 ```
-GET  /chat/                          页面（频道 1）
+GET  /chat/                          页面（频道 1，未登录给登录页）
 GET  /chat/<id>/                     页面（指定频道）
+POST /chat/login                     token 换 cookie（表单）
 GET  /chat/ws?token=&ch=<id>         WebSocket（A 端）
 GET  /chat/stream?token=&ch=<id>     SSE（B 端）
 POST /chat/send?token=&ch=<id>       发消息 {"text": "..."}
@@ -182,6 +189,6 @@ kokonachat/
 ## 已知边界
 
 - 内存只保留最近 300 条（磁盘更多，但 `/chat/history` 目前只回内存那批）
-- 页面免 token，知道 URL 即可当 B（要收紧可以改成必须 `?token=`）
+- 页面与接口都需要 token：页面登录后靠 cookie（HttpOnly、一年有效），A 端仍用 `?token=`
 - 单进程持有写锁，不支持多实例同时写同一份 data 目录
 - WebSocket 帧上限 1MB，单条消息上限 4000 字符

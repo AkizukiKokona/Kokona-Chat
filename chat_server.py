@@ -413,7 +413,6 @@ PAGE = r"""<!doctype html>
 <script>
 (function(){
   var qs = new URLSearchParams(location.search);
-  var TOKEN = qs.get('token') || 'sukikokona1212';
   var RESERVED = ['ws','stream','send','channels','history','health'];
 
   // 两个角色在界面上的显示名
@@ -456,7 +455,7 @@ PAGE = r"""<!doctype html>
     log.scrollTop = log.scrollHeight;
   }
 
-  var es = new EventSource('/chat/stream?token=' + encodeURIComponent(TOKEN) + '&ch=' + encodeURIComponent(ch));
+  var es = new EventSource('/chat/stream?ch=' + encodeURIComponent(ch));
   es.onopen = function(){ statusEl.textContent = '已连接 · ' + NAME_B; statusEl.classList.add('on'); };
   es.onerror = function(){ statusEl.textContent = '重连中…'; statusEl.classList.remove('on'); };
   es.onmessage = function(e){ try { add(JSON.parse(e.data)); } catch(_){} };
@@ -485,7 +484,7 @@ PAGE = r"""<!doctype html>
     if (!text) return;
     input.value = '';
     autoGrow();
-    fetch('/chat/send?token=' + encodeURIComponent(TOKEN) + '&ch=' + encodeURIComponent(ch), {
+    fetch('/chat/send?ch=' + encodeURIComponent(ch), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({text: text})
@@ -518,7 +517,7 @@ PAGE = r"""<!doctype html>
   window.addEventListener('resize', placePanel);
 
   function loadChannels(){
-    fetch('/chat/channels?token=' + encodeURIComponent(TOKEN))
+    fetch('/chat/channels')
       .then(function(r){ return r.json(); })
       .then(function(d){
         for (var i = 0; i < d.channels.length; i++) {
@@ -552,7 +551,7 @@ PAGE = r"""<!doctype html>
     if (name === null) return;
     name = String(name).trim().slice(0, 20);
     if (!name || name === cur) return;
-    fetch('/chat/channels/rename?token=' + encodeURIComponent(TOKEN) + '&ch=' + encodeURIComponent(ch), {
+    fetch('/chat/channels/rename?ch=' + encodeURIComponent(ch), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name: name})
@@ -569,7 +568,7 @@ PAGE = r"""<!doctype html>
   document.getElementById('newCh').addEventListener('click', function(){
     var btn = this;
     btn.disabled = true; btn.textContent = '创建中…';
-    fetch('/chat/channels/new?token=' + encodeURIComponent(TOKEN), {method:'POST'})
+    fetch('/chat/channels/new', {method:'POST'})
       .then(function(r){ return r.json(); })
       .then(function(d){
         btn.disabled = false; btn.textContent = '＋ 新建频道';
@@ -620,6 +619,56 @@ PAGE = r"""<!doctype html>
 """
 
 
+LOGIN_PAGE = r"""<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#11131a">
+<title>Kokona Chat · 登录</title>
+<style>
+  :root{--bg:#11131a;--panel:#191b23;--ink:#f4f2ef;--muted:#8d8f9c;
+        --accent:#f2b6bb;--line:#2a2d38}
+  *{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:var(--bg);color:var(--ink);padding:24px;
+    font:14px/1.6 "Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+  .card{
+    width:min(360px,100%);padding:28px 26px;border:1px solid var(--line);
+    border-radius:14px;background:var(--panel);box-shadow:0 20px 50px rgba(0,0,0,.35);
+  }
+  h1{margin:0 0 6px;font-size:17px;font-weight:620;letter-spacing:.02em}
+  p{margin:0 0 18px;color:var(--muted);font-size:12.5px}
+  input{
+    width:100%;padding:11px 13px;border-radius:9px;border:1px solid var(--line);
+    background:#0e1016;color:var(--ink);font:inherit;outline:none;
+  }
+  input:focus{border-color:rgba(242,182,187,.6)}
+  button{
+    margin-top:12px;width:100%;height:42px;border-radius:9px;cursor:pointer;font:inherit;
+    border:1px solid rgba(242,182,187,.55);background:rgba(242,182,187,.18);color:var(--ink);
+  }
+  button:active{background:rgba(242,182,187,.34)}
+  .err{margin:11px 0 0;color:#ff9b9b;font-size:12px}
+</style>
+</head>
+<body>
+<form class="card" method="post" action="/chat/login">
+  <h1>Kokona Chat</h1>
+  <p>输入访问 token 继续（记住后不用再输）</p>
+  <input type="password" name="token" placeholder="token" autofocus
+         autocomplete="current-password" spellcheck="false">
+  <input type="hidden" name="next" value="__NEXT__">
+  <button type="submit">进入</button>
+  __ERROR__
+</form>
+</body>
+</html>
+"""
+
+
 # --------------------------------------------------------------------------
 # HTTP / WS
 # --------------------------------------------------------------------------
@@ -655,7 +704,48 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("X-Token") == TOKEN:
             return True
         auth = self.headers.get("Authorization", "")
-        return auth.lower().startswith("bearer ") and auth[7:].strip() == TOKEN
+        if auth.lower().startswith("bearer ") and auth[7:].strip() == TOKEN:
+            return True
+        return self._cookie_token() == TOKEN
+
+    def _cookie_token(self):
+        raw = self.headers.get("Cookie") or ""
+        for part in raw.split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "chat_token":
+                return v
+        return None
+
+    def _set_cookie(self):
+        cookie = "chat_token=%s; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax" % TOKEN
+        if (self.headers.get("X-Forwarded-Proto") or "").lower() == "https":
+            cookie += "; Secure"
+        self.send_header("Set-Cookie", cookie)
+
+    def _serve_page(self):
+        """页面：URL 带正确 token 时种 cookie 并跳到干净地址；否则看 cookie；都没有给登录页"""
+        q = self._qs()
+        if q.get("token", [""])[0] == TOKEN:
+            target = urlparse(self.path).path or "/chat/"
+            self.send_response(302)
+            self.send_header("Location", target)
+            self._set_cookie()
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self._cookie_token() == TOKEN:
+            return self._text(200, PAGE, "text/html; charset=utf-8")
+        return self._login("")
+
+    def _login(self, error="", next_path=None):
+        import html as _html
+        if next_path is None:
+            next_path = urlparse(self.path).path or "/chat/"
+        err_html = ('<p class="err">%s</p>' % _html.escape(error)) if error else ""
+        body = (LOGIN_PAGE
+                .replace("__NEXT__", _html.escape(next_path, quote=True))
+                .replace("__ERROR__", err_html))
+        return self._text(200, body, "text/html; charset=utf-8")
 
     def _json(self, code, obj):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -680,11 +770,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = self._path()
 
-        if p in ("/", "/chat"):
-            return self._text(200, PAGE, "text/html; charset=utf-8")
-
-        if p.startswith("/chat/") and p.count("/") == 2 and p.split("/")[2] not in RESERVED:
-            return self._text(200, PAGE, "text/html; charset=utf-8")
+        if p in ("/", "/chat") or (
+            p.startswith("/chat/") and p.count("/") == 2 and p.split("/")[2] not in RESERVED
+        ):
+            return self._serve_page()
 
         if p in ("/chat/health", "/health"):
             with _lock:
@@ -742,6 +831,27 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- POST ----------
     def do_POST(self):
         p = self._path()
+
+        if p in ("/chat/login", "/login"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            raw = self.rfile.read(length) if length > 0 else b""
+            form = parse_qs(raw.decode("utf-8", "replace"))
+            token = (form.get("token") or [""])[0]
+            nxt = (form.get("next") or ["/chat/"])[0]
+            if not nxt.startswith("/") or nxt.startswith("//"):
+                nxt = "/chat/"                     # 防开放重定向
+            if token != TOKEN:
+                time.sleep(0.4)                    # 拖一下猜 token 的节奏
+                return self._login("token 不对，再试一次", nxt)
+            self.send_response(302)
+            self.send_header("Location", nxt)
+            self._set_cookie()
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
 
         if p in ("/chat/channels/new", "/channels/new"):
             if not self._token_ok():
