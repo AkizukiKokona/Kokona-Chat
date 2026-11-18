@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import struct
 import threading
 import time
@@ -28,6 +29,8 @@ TOKEN = os.environ.get("CHAT_TOKEN", "sukikokona1212")
 PORT = int(os.environ.get("CHAT_PORT", "8299"))
 HISTORY_MAX = int(os.environ.get("CHAT_HISTORY", "300"))
 CHANNELS_FILE = os.environ.get("CHAT_CHANNELS_FILE", "/opt/kokona-chat/channels.json")
+DATA_DIR = os.environ.get("CHAT_DATA_DIR", "/opt/kokona-chat/data")
+FSYNC = os.environ.get("CHAT_FSYNC", "1") not in ("0", "false", "no")
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MAX_TEXT = 4000
 RESERVED = {"ws", "stream", "send", "channels", "history", "health"}
@@ -37,17 +40,126 @@ _seq = [0]
 
 
 # --------------------------------------------------------------------------
+# 存储：每频道一个追加日志（JSONL）
+#
+# 为什么不用 SQLite：这里的数据只有「按时间追加」和「读最近 N 条」两种访问，
+# 用不上关系查询、索引、事务。日志结构顺序写、追加 O(1)、崩溃最多坏最后一行
+# （读取时直接跳过），文件本身 `tail -f` 就能看。每频道一个文件天然隔离，
+# 以后上多用户只是再多几个文件；真要换引擎，只替换这一层。
+# --------------------------------------------------------------------------
+def tail_lines(path, n, block=16384):
+    """只从文件尾部读最后 n 行，避免把整个文件载入内存"""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            pos = fh.tell()
+            if pos == 0:
+                return []
+            data = b""
+            while pos > 0 and data.count(b"\n") <= n:
+                step = min(block, pos)
+                pos -= step
+                fh.seek(pos)
+                data = fh.read(step) + data
+        lines = data.split(b"\n")
+        if pos > 0:
+            lines = lines[1:]                 # 首行可能是半截，丢掉
+        lines = [l for l in lines if l.strip()]
+        return [l.decode("utf-8", "replace") for l in lines[-n:]]
+    except OSError:
+        return []
+
+
+class MessageStore(object):
+    """追加写 + 尾部读。单进程使用，写操作自带锁。"""
+
+    MAX_BYTES = 4 * 1024 * 1024      # 单文件超 4MB 触发压缩
+    KEEP_LINES = 2000                # 压缩后保留最后多少条
+
+    def __init__(self, root):
+        self.root = root
+        os.makedirs(root, exist_ok=True)
+        self._lock = threading.Lock()
+        self.max_id = 0              # 重启后用于恢复自增 id
+
+    def _path(self, cid):
+        safe = re.sub(r"[^0-9A-Za-z_-]", "_", str(cid))[:40] or "1"
+        return os.path.join(self.root, "ch-%s.jsonl" % safe)
+
+    def append(self, msg):
+        line = json.dumps(msg, ensure_ascii=False, separators=(",", ":")) + "\n"
+        path = self._path(msg["ch"])
+        with self._lock:
+            try:
+                with open(path, "a", encoding="utf-8") as fh:
+                    fh.write(line)
+                    fh.flush()
+                    if FSYNC:
+                        os.fsync(fh.fileno())
+                try:
+                    self.max_id = max(self.max_id, int(msg.get("id") or 0))
+                except (TypeError, ValueError):
+                    pass
+                if os.path.getsize(path) > self.MAX_BYTES:
+                    self._compact(path)
+            except OSError:
+                pass
+
+    def tail(self, cid, n):
+        out = []
+        for line in tail_lines(self._path(cid), n):
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue                  # 崩溃残留的半行，跳过即可
+            if isinstance(msg, dict):
+                out.append(msg)
+        for m in out:
+            try:
+                self.max_id = max(self.max_id, int(m.get("id") or 0))
+            except (TypeError, ValueError):
+                pass
+        return out
+
+    def clear(self, cid):
+        with self._lock:
+            try:
+                os.remove(self._path(cid))
+            except OSError:
+                pass
+
+    def _compact(self, path):
+        keep = tail_lines(path, self.KEEP_LINES)
+        tmp = path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.writelines(l + "\n" for l in keep)
+            os.replace(tmp, path)
+        except OSError:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+_store = None
+
+
+# --------------------------------------------------------------------------
 # 频道
 # --------------------------------------------------------------------------
 class Channel(object):
     __slots__ = ("cid", "name", "ws", "sse", "history")
 
-    def __init__(self, cid, name):
+    def __init__(self, cid, name, store=None):
         self.cid = cid
         self.name = name
         self.ws = []
         self.sse = []
         self.history = collections.deque(maxlen=HISTORY_MAX)
+        if store is not None:
+            for msg in store.tail(cid, HISTORY_MAX):
+                self.history.append(msg)
 
 
 _channels = {}
@@ -80,20 +192,23 @@ def get_channel(cid, create=False):
     with _lock:
         ch = _channels.get(cid)
         if ch is None and create:
-            ch = Channel(cid, "频道 %s" % cid)
+            ch = Channel(cid, "频道 %s" % cid, _store)
             _channels[cid] = ch
             _write_meta()
         return ch
 
 
 def init_channels():
+    global _store
+    _store = MessageStore(DATA_DIR)
     meta = _read_meta()
     for cid in ["1", "2"]:
         meta.setdefault(cid, "频道 %s" % cid)
     with _lock:
         for cid, name in meta.items():
-            _channels[cid] = Channel(cid, name)
+            _channels[cid] = Channel(cid, name, _store)
     _write_meta()
+    _seq[0] = _store.max_id          # 重启后 id 接着历史走，不会撞号
 
 
 def publish(ch, sender, text):
@@ -112,6 +227,11 @@ def publish(ch, sender, text):
         sse_targets = list(ch.sse)
 
     payload = json.dumps(msg, ensure_ascii=False)
+    if _store is not None:
+        try:
+            _store.append(msg)       # 先落盘再广播：发出去的一定留得住
+        except Exception:
+            pass
     for q in sse_targets:
         try:
             q.put_nowait(payload)
@@ -666,6 +786,18 @@ class Handler(BaseHTTPRequestHandler):
                 ch.name = name
                 _write_meta()
             return self._json(200, {"ok": True, "id": ch.cid, "name": ch.name})
+
+        if p in ("/chat/channels/clear", "/channels/clear"):
+            if not self._token_ok():
+                return self._json(401, {"error": "bad token"})
+            ch = get_channel(self._ch_param(), create=False)
+            if ch is None:
+                return self._json(404, {"error": "no such channel"})
+            with _lock:
+                ch.history.clear()
+            if _store is not None:
+                _store.clear(ch.cid)
+            return self._json(200, {"ok": True, "id": ch.cid, "cleared": True})
 
         if p not in ("/chat/send", "/send"):
             return self._json(404, {"error": "not found"})

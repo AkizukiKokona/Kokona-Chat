@@ -1,6 +1,7 @@
-# 运行期数据：频道元数据（线上实际文件，不入库）
+# 运行期数据：频道元数据与消息日志（线上实际文件，不入库）
 channels.json
 channels.json.tmp
+data/
 
 # Python
 __pycache__/
