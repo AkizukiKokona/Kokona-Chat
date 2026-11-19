@@ -682,10 +682,13 @@ function renderMd(src){
     jumps.style.bottom = (f.offsetHeight + 14) + 'px';
   }
   function updateJumps(){
-    jumpMine.hidden = mineEls.length === 0;
-    jumpUnread.hidden = unread === 0;
+    // 只在「主动离开底部」时才出现；在底部一律隐藏，免得挡住最新消息
+    var showMine = !atBottom && mineEls.length > 0;
+    var showUnread = !atBottom && unread > 0;
+    jumpMine.hidden = !showMine;
+    jumpUnread.hidden = !showUnread;
     jumpUnread.textContent = '↓ ' + unread + ' 条新消息';
-    jumps.classList.toggle('show', unread > 0 || mineEls.length > 0);
+    jumps.classList.toggle('show', showMine || showUnread);
   }
 
   log.addEventListener('scroll', function(){
@@ -745,6 +748,8 @@ function renderMd(src){
     if (live) {
       if (atBottom) {
         scrollBottom(false);
+        unread = 0; firstUnreadEl = null;
+        updateJumps();
       } else {
         unread++;
         if (!firstUnreadEl) firstUnreadEl = el;
