@@ -297,7 +297,7 @@ PAGE = r"""<!doctype html>
   .msg{
     max-width:78%; padding:9px 13px; border-radius:12px;
     background:var(--panel); border:1px solid var(--line);
-    overflow-wrap:anywhere; white-space:pre-wrap;
+    overflow-wrap:anywhere;
   }
   .msg.a{align-self:flex-start; border-bottom-left-radius:4px}
   .msg.b{
@@ -306,6 +306,34 @@ PAGE = r"""<!doctype html>
   }
   .meta{display:block; font-size:10px; color:var(--muted); margin-bottom:3px; letter-spacing:.06em}
   .empty{color:var(--muted); text-align:center; margin:auto 0; font-size:12.5px; line-height:1.9}
+
+  /* --- Markdown 渲染结果 --- */
+  .md-p{margin:0}
+  .md-p + .md-p{margin-top:5px}
+  .md-h{font-weight:640; font-size:14.5px; margin:7px 0 4px; letter-spacing:.01em}
+  .md-h:first-child{margin-top:0}
+  .md-ul,.md-ol{margin:5px 0; padding-left:19px}
+  .md-ul li,.md-ol li{margin:2px 0}
+  .md-quote{
+    margin:5px 0; padding:1px 0 1px 9px;
+    border-left:2px solid rgba(242,182,187,.45); color:rgba(248,247,245,.72);
+  }
+  .md-code{
+    margin:6px 0; padding:9px 11px; border-radius:7px;
+    background:rgba(0,0,0,.42); border:1px solid rgba(255,255,255,.07);
+    overflow-x:auto; white-space:pre;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px; line-height:1.6; -webkit-overflow-scrolling:touch;
+  }
+  .md-ic{
+    padding:1px 5px; border-radius:4px; background:rgba(0,0,0,.42);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.92em;
+  }
+  .md-h1{font-size:16px}
+  .md-h2{font-size:15px}
+  .msg hr{border:0; border-top:1px solid var(--line); margin:9px 0}
+  .msg a{color:var(--accent); text-decoration:underline; text-underline-offset:2px}
+  .msg strong{font-weight:650; color:var(--ink)}
   form{
     display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line);
     background:rgba(17,19,26,.96); align-items:flex-end;
@@ -411,6 +439,124 @@ PAGE = r"""<!doctype html>
 </div>
 
 <script>
+/* ---------------------------------------------------------------
+   极简 Markdown 渲染（零依赖）
+   安全前提：先转义 HTML，再替换标记；链接只放行 http(s)/mailto。
+   --------------------------------------------------------------- */
+function mdEsc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+function mdInline(s){
+  s = mdEsc(s);
+
+  // 行内代码先抽出来占位，免得里面的符号被后面的规则吃掉
+  var codes = [];
+  s = s.replace(/`([^`]+)`/g, function(_, c){
+    codes.push(c);
+    return '\u0000C' + (codes.length - 1) + '\u0000';
+  });
+
+  // 链接：只认 http/https/mailto，javascript: 之类原样留着不变成链接
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function(m, text, url){
+    if (!/^(https?:\/\/|mailto:)/i.test(url)) return m;
+    return '<a href="' + url + '" target="_blank" rel="noreferrer noopener">' + text + '</a>';
+  });
+
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[^_])_([^_\n]+)_/g, '$1<em>$2</em>');
+  s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
+  s = s.replace(/\u0000C(\d+)\u0000/g, function(_, i){
+    return '<code class="md-ic">' + codes[+i] + '</code>';
+  });
+  return s;
+}
+
+function mdBlock(text){
+  var lines = text.split('\n');
+  var html = [];
+  var list = '';
+
+  function closeList(){
+    if (list) { html.push('</' + list + '>'); list = ''; }
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+
+    if (/^\s*$/.test(line)) { closeList(); continue; }
+
+    var h = line.match(/^\s{0,3}(#{1,6})\s+(.*)$/);
+    if (h) {
+      closeList();
+      var n = h[1].length;
+      var cls = n === 1 ? 'md-h md-h1' : (n === 2 ? 'md-h md-h2' : 'md-h');
+      html.push('<div class="' + cls + '">' + mdInline(h[2]) + '</div>');
+      continue;
+    }
+
+    if (/^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      closeList(); html.push('<hr>'); continue;
+    }
+
+    var q = line.match(/^\s{0,3}>\s?(.*)$/);
+    if (q) {
+      closeList();
+      html.push('<div class="md-quote">' + mdInline(q[1]) + '</div>');
+      continue;
+    }
+
+    var ul = line.match(/^\s*[-*+]\s+(.*)$/);
+    if (ul) {
+      if (list !== 'ul') { closeList(); html.push('<ul class="md-ul">'); list = 'ul'; }
+      html.push('<li>' + mdInline(ul[1]) + '</li>');
+      continue;
+    }
+
+    var ol = line.match(/^\s*\d{1,3}[.)]\s+(.*)$/);
+    if (ol) {
+      if (list !== 'ol') { closeList(); html.push('<ol class="md-ol">'); list = 'ol'; }
+      html.push('<li>' + mdInline(ol[1]) + '</li>');
+      continue;
+    }
+
+    closeList();
+    html.push('<div class="md-p">' + mdInline(line) + '</div>');
+  }
+
+  closeList();
+  return html.join('');
+}
+
+function renderMd(src){
+  var text = String(src == null ? '' : src).replace(/\r\n?/g, '\n');
+  if (!text) return '';
+  var chunks = text.split('```');
+  var out = [];
+
+  for (var i = 0; i < chunks.length; i++) {
+    var part = chunks[i];
+    if (i % 2 === 1) {
+      // 代码块；首行若是语言标识就丢掉（不做高亮）
+      part = part.replace(/^\n/, '');
+      var nl = part.indexOf('\n');
+      if (nl > -1 && /^[A-Za-z0-9_+-]{1,15}$/.test(part.slice(0, nl).trim())) {
+        part = part.slice(nl + 1);
+      }
+      out.push('<pre class="md-code">' + mdEsc(part.replace(/\n$/, '')) + '</pre>');
+    } else {
+      out.push(mdBlock(part));
+    }
+  }
+  return out.join('');
+}
+</script>
+<script>
 (function(){
   var qs = new URLSearchParams(location.search);
   var RESERVED = ['ws','stream','send','channels','history','health'];
@@ -450,7 +596,7 @@ PAGE = r"""<!doctype html>
     var t = new Date(msg.ts);
     meta.textContent = (msg.from === 'B' ? NAME_B : NAME_A) + ' · ' + t.toLocaleTimeString('zh-CN', {hour12:false});
     var body = document.createElement('span');
-    body.textContent = msg.text;
+    body.innerHTML = renderMd(msg.text);
     d.appendChild(meta); d.appendChild(body); log.appendChild(d);
     log.scrollTop = log.scrollHeight;
   }
