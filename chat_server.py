@@ -307,6 +307,48 @@ PAGE = r"""<!doctype html>
   .meta{display:block; font-size:10px; color:var(--muted); margin-bottom:3px; letter-spacing:.06em}
   .empty{color:var(--muted); text-align:center; margin:auto 0; font-size:12.5px; line-height:1.9}
 
+  /* --- 顶部提示 --- */
+  .toast{
+    position:fixed; left:50%; top:14px; z-index:60;
+    transform:translate(-50%, -10px);
+    max-width:min(92vw,420px); padding:8px 15px; border-radius:999px;
+    background:rgba(22,24,33,.96); border:1px solid var(--line);
+    color:var(--ink); font-size:12px; text-align:center; letter-spacing:.02em;
+    box-shadow:0 10px 30px rgba(0,0,0,.45);
+    opacity:0; pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
+  }
+  .toast.show{opacity:1; transform:translate(-50%, 0)}
+  .toast.ok{border-color:rgba(242,182,187,.55)}
+
+  /* --- 回到未读 / 我的最后一条 --- */
+  .jumps{
+    position:fixed; right:14px; z-index:55;
+    display:flex; flex-direction:column; gap:8px; align-items:flex-end;
+    opacity:0; pointer-events:none; transition:opacity .18s ease;
+  }
+  .jumps.show{opacity:1; pointer-events:auto}
+  .jumps button{
+    display:inline-flex; align-items:center; height:34px; padding:0 13px;
+    border-radius:999px; cursor:pointer; font:inherit; font-size:12px;
+    border:1px solid rgba(242,182,187,.45); background:rgba(25,27,35,.97);
+    color:var(--ink); box-shadow:0 8px 24px rgba(0,0,0,.45);
+  }
+  .jumps button.accent{
+    border-color:rgba(242,182,187,.8); background:rgba(242,182,187,.2);
+  }
+  .jumps button[hidden]{display:none}
+
+  /* --- 轮次结束分隔 --- */
+  .md-turn{
+    display:flex; align-items:center; gap:10px;
+    margin:12px 2px; color:rgba(248,247,245,.42);
+    font-size:11px; letter-spacing:.14em; align-self:stretch;
+  }
+  .md-turn::before,.md-turn::after{
+    content:""; flex:1; height:1px; background:rgba(255,255,255,.12);
+  }
+
   /* --- Markdown 渲染结果 --- */
   .md-p{margin:0}
   .md-p + .md-p{margin-top:5px}
@@ -424,6 +466,13 @@ PAGE = r"""<!doctype html>
 </header>
 
 <main id="log"><p class="empty" id="empty">这个频道还没有消息<br>把 WS 地址交给心夏就能开聊</p></main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<div id="jumps" class="jumps">
+  <button id="jumpMine" type="button" hidden>↑ 我的最后一条</button>
+  <button id="jumpUnread" type="button" class="accent" hidden>↓ 条新消息</button>
+</div>
 
 <form id="form">
   <textarea id="input" rows="1" autocomplete="off" placeholder="说点什么…（Enter 发送 · Shift+Enter 换行）" enterkeyhint="send"></textarea>
@@ -587,24 +636,203 @@ function renderMd(src){
     });
   }
 
-  function add(msg){
-    if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
-    var d = document.createElement('div');
-    d.className = 'msg ' + (msg.from === 'B' ? 'b' : 'a');
-    var meta = document.createElement('span');
-    meta.className = 'meta';
-    var t = new Date(msg.ts);
-    meta.textContent = (msg.from === 'B' ? NAME_B : NAME_A) + ' · ' + t.toLocaleTimeString('zh-CN', {hour12:false});
-    var body = document.createElement('span');
-    body.innerHTML = renderMd(msg.text);
-    d.appendChild(meta); d.appendChild(body); log.appendChild(d);
-    log.scrollTop = log.scrollHeight;
+  // ---------- 本地缓存 ----------
+  var CACHE_KEY = 'kokona_chat_' + ch;
+  var CACHE_MAX = 200;
+  var seen = {};            // msg.id -> 1，用于去重（缓存 + SSE 重发）
+  var cacheMsgs = [];
+  var saveTimer = null;
+
+  function saveCache(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function(){
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(cacheMsgs)); } catch(_) {}
+    }, 350);
   }
 
+  // ---------- 顶部提示 ----------
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+  function showToast(text, ok, ms){
+    toastEl.textContent = text;
+    toastEl.classList.toggle('ok', !!ok);
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, ms || 1800);
+  }
+
+  // ---------- 滚动与跳转按钮 ----------
+  var jumps = document.getElementById('jumps');
+  var jumpMine = document.getElementById('jumpMine');
+  var jumpUnread = document.getElementById('jumpUnread');
+  var atBottom = true;
+  var unread = 0;
+  var firstUnreadEl = null;
+  var mineEls = [];
+
+  function nearBottom(){
+    return log.scrollHeight - log.scrollTop - log.clientHeight < 90;
+  }
+  function scrollBottom(smooth){
+    if (smooth) log.scrollTo({top: log.scrollHeight, behavior: 'smooth'});
+    else log.scrollTop = log.scrollHeight;
+  }
+  function syncJumpPos(){
+    var f = document.getElementById('form');
+    jumps.style.bottom = (f.offsetHeight + 14) + 'px';
+  }
+  function updateJumps(){
+    jumpMine.hidden = mineEls.length === 0;
+    jumpUnread.hidden = unread === 0;
+    jumpUnread.textContent = '↓ ' + unread + ' 条新消息';
+    jumps.classList.toggle('show', unread > 0 || mineEls.length > 0);
+  }
+
+  log.addEventListener('scroll', function(){
+    atBottom = nearBottom();
+    if (atBottom && unread) { unread = 0; firstUnreadEl = null; }
+    updateJumps();
+  });
+
+  jumpUnread.addEventListener('click', function(){
+    if (firstUnreadEl && firstUnreadEl.isConnected) {
+      firstUnreadEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+    } else {
+      scrollBottom(true);
+    }
+    unread = 0; firstUnreadEl = null; updateJumps();
+  });
+
+  jumpMine.addEventListener('click', function(){
+    var el = mineEls[mineEls.length - 1];
+    if (el && el.isConnected) el.scrollIntoView({behavior: 'smooth', block: 'center'});
+    unread = 0; firstUnreadEl = null; updateJumps();
+  });
+
+  // ---------- 渲染 ----------
+  // 轮次结束标记：短句且同时含「本轮/这轮」和「结束/完成」→ 显示成一条分隔
+  function isTurnEnd(text){
+    var t = String(text || '').trim();
+    if (!t || t.length > 30) return false;
+    return /(本轮|轮次|这一轮|这轮)/.test(t) && /(结束|完成|收尾)/.test(t);
+  }
+
+  function appendMsg(msg, live){
+    if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
+
+    var el = document.createElement('div');
+
+    if (isTurnEnd(msg.text)) {
+      el.className = 'md-turn';
+      el.textContent = '本轮对话结束';
+    } else {
+      el.className = 'msg ' + (msg.from === 'B' ? 'b' : 'a');
+      var meta = document.createElement('span');
+      meta.className = 'meta';
+      var t = new Date(msg.ts);
+      meta.textContent = (msg.from === 'B' ? NAME_B : NAME_A) + ' · ' +
+        t.toLocaleTimeString('zh-CN', {hour12: false});
+      var body = document.createElement('span');
+      body.innerHTML = renderMd(msg.text);
+      el.appendChild(meta);
+      el.appendChild(body);
+      if (msg.from === 'B') mineEls.push(el);
+    }
+
+    el.setAttribute('data-id', msg.id);
+    log.appendChild(el);
+
+    if (live) {
+      if (atBottom) {
+        scrollBottom(false);
+      } else {
+        unread++;
+        if (!firstUnreadEl) firstUnreadEl = el;
+        updateJumps();
+      }
+    }
+    return el;
+  }
+
+  // ---------- 从缓存恢复 ----------
+  function loadCache(){
+    try {
+      var raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return 0;
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return 0;
+      var n = 0;
+      for (var i = 0; i < arr.length; i++) {
+        var mm = arr[i];
+        if (!mm || mm.id == null || seen[mm.id]) continue;
+        seen[mm.id] = 1;
+        cacheMsgs.push(mm);
+        appendMsg(mm, false);
+        n++;
+      }
+      return n;
+    } catch (_) { return 0; }
+  }
+
+  // 先用本地缓存铺底，SSE 只补增量
+  var cachedCount = loadCache();
+  if (cachedCount) {
+    showToast('已加载 ' + cachedCount + ' 条缓存', false, 1200);
+    scrollBottom(false);
+  }
+
+  // ---------- 实时流 ----------
+  var metaTotal = -1;
+  var received = 0;
+  var syncDone = false;
+
   var es = new EventSource('/chat/stream?ch=' + encodeURIComponent(ch));
-  es.onopen = function(){ statusEl.textContent = '已连接 · ' + NAME_B; statusEl.classList.add('on'); };
-  es.onerror = function(){ statusEl.textContent = '重连中…'; statusEl.classList.remove('on'); };
-  es.onmessage = function(e){ try { add(JSON.parse(e.data)); } catch(_){} };
+  es.onopen = function(){
+    statusEl.textContent = '已连接 · ' + NAME_B;
+    statusEl.classList.add('on');
+  };
+  es.onerror = function(){
+    statusEl.textContent = '重连中…';
+    statusEl.classList.remove('on');
+  };
+
+  es.addEventListener('meta', function(e){
+    try {
+      var d = JSON.parse(e.data);
+      metaTotal = d.count || 0;
+      if (metaTotal === 0) {
+        syncDone = true;
+        showToast(cacheMsgs.length ? '已是最新' : '这个频道还没有消息', true, 1600);
+      } else {
+        showToast('同步中… 0/' + metaTotal, false, 8000);
+      }
+    } catch (_) {}
+  });
+
+  es.onmessage = function(e){
+    var msg;
+    try { msg = JSON.parse(e.data); } catch (_) { return; }
+    if (!msg || msg.id == null) return;
+
+    received++;
+    if (!seen[msg.id]) {
+      seen[msg.id] = 1;
+      cacheMsgs.push(msg);
+      if (cacheMsgs.length > CACHE_MAX) cacheMsgs.splice(0, cacheMsgs.length - CACHE_MAX);
+      appendMsg(msg, syncDone);      // 同步阶段不逐条滚，最后一次到位
+      saveCache();
+    }
+
+    if (!syncDone && metaTotal > 0) {
+      if (received >= metaTotal) {
+        syncDone = true;
+        scrollBottom(false);
+        showToast(metaTotal + ' 条已同步', true, 1600);
+      } else {
+        showToast('同步中… ' + received + '/' + metaTotal, false, 8000);
+      }
+    }
+  };
 
   // ---- 输入框：随内容长高，最多五行，之后内部滚动 ----
   function autoGrow(){
@@ -612,6 +840,7 @@ function renderMd(src){
     var need = input.scrollHeight;
     input.style.height = Math.min(need, MAX_INPUT_H) + 'px';
     input.style.overflowY = need > MAX_INPUT_H ? 'auto' : 'hidden';
+    syncJumpPos();
   }
   input.addEventListener('input', autoGrow);
 
@@ -634,6 +863,10 @@ function renderMd(src){
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({text: text})
+    }).then(function(){
+      // 自己发完一定回到最新处
+      atBottom = true; unread = 0; firstUnreadEl = null;
+      scrollBottom(true); updateJumps();
     }).catch(function(){ statusEl.textContent = '发送失败'; });
     input.focus();
   });
@@ -754,10 +987,13 @@ function renderMd(src){
   });
 
   window.addEventListener('pageshow', function(){ input.focus(); autoGrow(); });
+  window.addEventListener('resize', syncJumpPos);
 
   // 首屏就拉一次频道信息，让按钮和标题立刻显示真实频道名
   loadChannels();
   autoGrow();
+  syncJumpPos();
+  updateJumps();
 })();
 </script>
 </body>
@@ -1097,6 +1333,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
 
+            # 先告诉前端这批历史共多少条，方便显示同步进度
+            self.wfile.write(("event: meta\ndata: "
+                              + json.dumps({"ch": ch.cid, "count": len(hist)}, ensure_ascii=False)
+                              + "\n\n").encode("utf-8"))
             for m in hist:
                 self.wfile.write(("data: " + json.dumps(m, ensure_ascii=False) + "\n\n").encode("utf-8"))
             self.wfile.write(b"retry: 2000\n\n")
