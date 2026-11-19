@@ -33,7 +33,7 @@ DATA_DIR = os.environ.get("CHAT_DATA_DIR", "/opt/kokona-chat/data")
 FSYNC = os.environ.get("CHAT_FSYNC", "1") not in ("0", "false", "no")
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MAX_TEXT = 4000
-RESERVED = {"ws", "stream", "send", "channels", "history", "health"}
+RESERVED = {"ws", "stream", "send", "channels", "history", "health", "log"}
 
 _lock = threading.Lock()
 _seq = [0]
@@ -608,7 +608,7 @@ function renderMd(src){
 <script>
 (function(){
   var qs = new URLSearchParams(location.search);
-  var RESERVED = ['ws','stream','send','channels','history','health'];
+  var RESERVED = ['ws','stream','send','channels','history','health','log'];
 
   // 两个角色在界面上的显示名
   var NAME_A = '心夏';           // WebSocket 那一侧
@@ -619,6 +619,19 @@ function renderMd(src){
   var ch = qs.get('ch') || '1';
   var m = location.pathname.match(/^\/chat\/([^\/]+)\/?$/);
   if (m && RESERVED.indexOf(m[1]) < 0) ch = decodeURIComponent(m[1]);
+
+  // 前端异常上报：出了 JS 错误会写进服务端日志，方便排查"消息不显示"
+  window.addEventListener('error', function(ev){
+    try {
+      var payload = JSON.stringify({
+        m: String(ev.message || ''),
+        s: (ev.filename || '') + ':' + (ev.lineno || 0)
+      });
+      var url = '/chat/log?ch=' + encodeURIComponent(ch);
+      if (navigator.sendBeacon) navigator.sendBeacon(url, payload);
+      else fetch(url, {method: 'POST', body: payload, keepalive: true});
+    } catch (_) {}
+  });
 
   var log = document.getElementById('log');
   var empty = document.getElementById('empty');
@@ -720,26 +733,39 @@ function renderMd(src){
     return /(本轮|轮次|这一轮|这轮)/.test(t) && /(结束|完成|收尾)/.test(t);
   }
 
-  function appendMsg(msg, live){
-    if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
-
+  function buildMsgEl(msg){
     var el = document.createElement('div');
-
     if (isTurnEnd(msg.text)) {
       el.className = 'md-turn';
       el.textContent = '本轮对话结束';
-    } else {
+      return el;
+    }
+    el.className = 'msg ' + (msg.from === 'B' ? 'b' : 'a');
+    var meta = document.createElement('span');
+    meta.className = 'meta';
+    var t = new Date(msg.ts);
+    meta.textContent = (msg.from === 'B' ? NAME_B : NAME_A) + ' · ' +
+      t.toLocaleTimeString('zh-CN', {hour12: false});
+    var body = document.createElement('span');
+    body.innerHTML = renderMd(msg.text);
+    el.appendChild(meta);
+    el.appendChild(body);
+    if (msg.from === 'B') mineEls.push(el);
+    return el;
+  }
+
+  function appendMsg(msg, live){
+    if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
+
+    var el;
+    try {
+      el = buildMsgEl(msg);
+    } catch (err) {
+      // 单条渲染失败也要显示出来，不能让它把整批后面的消息带崩
+      el = document.createElement('div');
       el.className = 'msg ' + (msg.from === 'B' ? 'b' : 'a');
-      var meta = document.createElement('span');
-      meta.className = 'meta';
-      var t = new Date(msg.ts);
-      meta.textContent = (msg.from === 'B' ? NAME_B : NAME_A) + ' · ' +
-        t.toLocaleTimeString('zh-CN', {hour12: false});
-      var body = document.createElement('span');
-      body.innerHTML = renderMd(msg.text);
-      el.appendChild(meta);
-      el.appendChild(body);
-      if (msg.from === 'B') mineEls.push(el);
+      el.textContent = String((msg && msg.text) || '');
+      if (msg && msg.from === 'B') mineEls.push(el);
     }
 
     el.setAttribute('data-id', msg.id);
@@ -789,7 +815,18 @@ function renderMd(src){
   // ---------- 实时流 ----------
   var metaTotal = -1;
   var received = 0;
-  var syncDone = false;
+  var firstBatch = true;      // 刚打开时的历史批次：不逐条滚动，静默后统一到底
+  var batchTimer = null;
+
+  function endBatch(){
+    if (!firstBatch) return;
+    firstBatch = false;
+    scrollBottom(false);
+    atBottom = true;
+    updateJumps();
+    var n = log.querySelectorAll('.msg[data-id], .md-turn[data-id]').length;
+    showToast(metaTotal > 0 ? (metaTotal + ' 条已同步') : ('已加载 ' + n + ' 条'), true, 1600);
+  }
 
   var es = new EventSource('/chat/stream?ch=' + encodeURIComponent(ch));
   es.onopen = function(){
@@ -806,10 +843,19 @@ function renderMd(src){
       var d = JSON.parse(e.data);
       metaTotal = d.count || 0;
       if (metaTotal === 0) {
-        syncDone = true;
-        showToast(cacheMsgs.length ? '已是最新' : '这个频道还没有消息', true, 1600);
-      } else {
-        showToast('同步中… 0/' + metaTotal, false, 8000);
+        // 服务端是空的但本地还有缓存 → 缓存过期了，丢掉，避免显示已清空的消息
+        if (cacheMsgs.length) {
+          cacheMsgs.length = 0;
+          seen = {};
+          mineEls.length = 0;
+          unread = 0; firstUnreadEl = null;
+          log.innerHTML = '<p class="empty" id="empty">这个频道还没有消息<br>把 WS 地址交给心夏就能开聊</p>';
+          empty = document.getElementById('empty');
+          try { localStorage.removeItem(CACHE_KEY); } catch (_) {}
+          updateJumps();
+        }
+        showToast('这个频道还没有消息', true, 1600);
+        endBatch();
       }
     } catch (_) {}
   });
@@ -824,18 +870,15 @@ function renderMd(src){
       seen[msg.id] = 1;
       cacheMsgs.push(msg);
       if (cacheMsgs.length > CACHE_MAX) cacheMsgs.splice(0, cacheMsgs.length - CACHE_MAX);
-      appendMsg(msg, syncDone);      // 同步阶段不逐条滚，最后一次到位
+      appendMsg(msg, !firstBatch);
       saveCache();
     }
 
-    if (!syncDone && metaTotal > 0) {
-      if (received >= metaTotal) {
-        syncDone = true;
-        scrollBottom(false);
-        showToast(metaTotal + ' 条已同步', true, 1600);
-      } else {
-        showToast('同步中… ' + received + '/' + metaTotal, false, 8000);
-      }
+    // 批次收尾：静默 350ms 就认为历史发完了。
+    // 不依赖 meta 事件——meta 万一丢了，这里也能正常结束，不至于新消息永远不滚动。
+    if (firstBatch) {
+      clearTimeout(batchTimer);
+      batchTimer = setTimeout(endBatch, 350);
     }
   };
 
@@ -1239,6 +1282,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+
+        if p in ("/chat/log", "/log"):
+            # 前端异常上报用，不校验 token（否则页面崩了连日志都发不出来）
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            raw = self.rfile.read(min(length, 2048)) if length > 0 else b""
+            line = raw.decode("utf-8", "replace").replace("\n", " ")[:400]
+            print("[client-error][ch=%s] %s" % (self._ch_param(), line), flush=True)
+            return self._json(200, {"ok": True})
 
         if p in ("/chat/channels/new", "/channels/new"):
             if not self._token_ok():
