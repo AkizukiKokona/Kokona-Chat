@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 import re
 import time
 import traceback
@@ -13,6 +14,18 @@ from urllib.parse import parse_qs, unquote, urlparse
 from . import auth, config, db, hub, mailer, pages, store, wskit
 
 HUB = hub.Hub()
+
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+STATIC_MIME = {
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+}
 
 # 路由：<id> / <name> 这种占位符转成命名组
 _ROUTES = []
@@ -798,6 +811,31 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
+    def _static(self, path):
+        name = path[len("/static/"):]
+        if "/" in name or ".." in name or name == "":
+            self._send_headers(404, "text/plain; charset=utf-8", 0)
+            return
+        full = os.path.join(STATIC_DIR, name)
+        if not os.path.isfile(full):
+            self._send_headers(404, "text/plain; charset=utf-8", 0)
+            return
+        try:
+            with open(full, "rb") as fh:
+                data = fh.read()
+        except OSError:
+            self._send_headers(500, "text/plain; charset=utf-8", 0)
+            return
+        ext = os.path.splitext(name)[1].lower()
+        self._send_headers(
+            200, STATIC_MIME.get(ext, "application/octet-stream"), len(data),
+            [("Cache-Control", "public, max-age=604800")],
+        )
+        try:
+            self.wfile.write(data)
+        except Exception:
+            pass
+
     def _redirect(self, location, code=302):
         self.send_response(code)
         self.send_header("Location", location)
@@ -858,6 +896,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._ws(path, query, user)
                 return
 
+            # 静态资源
+            if path.startswith("/static/"):
+                self._static(path)
+                return
+
             # API
             if path.startswith("/api/"):
                 body = self._read_body(self.headers.get("Content-Type"))
@@ -907,7 +950,7 @@ class Handler(BaseHTTPRequestHandler):
             self._html(200, pages.recover_page(base=self._prefix()))
             return
         if path == "/favicon.ico":
-            self._send_headers(204, "image/x-icon", 0)
+            self._static("/static/icon.ico")
             return
         if path == "/health":
             self._json(200, {"ok": True, "t": int(time.time())})

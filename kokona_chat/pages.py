@@ -32,8 +32,10 @@ a{color:var(--brand-d);text-decoration:none}
   background:linear-gradient(160deg,#eafaf0 0%,#f2f2f2 40%,#f2f2f2 100%)}
 .auth-card{width:100%;max-width:400px;background:var(--panel);border-radius:18px;padding:28px 22px 24px;
   box-shadow:0 8px 40px rgba(0,0,0,.06)}
-.auth-logo{width:62px;height:62px;border-radius:18px;background:var(--brand);color:#fff;display:flex;
-  align-items:center;justify-content:center;font-size:26px;font-weight:700;margin:0 auto 14px}
+.auth-logo{width:72px;height:72px;border-radius:20px;object-fit:cover;display:block;
+  margin:0 auto 14px;box-shadow:0 6px 20px rgba(7,193,96,.18)}
+.remember{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--sub);margin:0 0 12px;cursor:pointer}
+.remember input{width:16px;height:16px;accent-color:var(--brand);margin:0}
 .auth-title{text-align:center;font-size:20px;font-weight:600;margin:0 0 4px}
 .auth-sub{text-align:center;color:var(--sub);font-size:13px;margin:0 0 22px}
 .field{margin-bottom:14px}
@@ -60,11 +62,13 @@ a{color:var(--brand-d);text-decoration:none}
 /* ---------- 主界面 ---------- */
 .app{display:grid;grid-template-columns:340px 1fr;height:100dvh;overflow:hidden}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
-.side-head{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 8px}
-.side-head .brand{font-weight:700;font-size:17px}
-.side-search{padding:0 12px 8px}
-.side-search input{width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--line);
-  background:var(--soft);outline:none;font-size:14px}
+.side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
+.me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
+.me-btn:active{background:#f0f0f0}
+.me-av{width:38px;height:38px;border-radius:10px;object-fit:cover;background:#e4ece6;flex:0 0 auto;border:1px solid rgba(0,0,0,.05)}
+.me-name{font-weight:600;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-search{padding:4px 12px 8px}
+.side-search input{width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--soft);outline:none;font-size:14px}
 .conv-list{flex:1;overflow-y:auto;overscroll-behavior:contain}
 .conv{display:flex;gap:10px;padding:11px 14px;align-items:center;position:relative}
 .conv:active{background:#ececec}
@@ -81,11 +85,6 @@ a{color:var(--brand-d);text-decoration:none}
 .conv-last{font-size:13px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .badge{position:absolute;left:46px;top:4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
   background:var(--danger);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
-.tabbar{display:flex;border-top:1px solid var(--line);background:var(--panel);padding-bottom:env(safe-area-inset-bottom)}
-.tabbar button{flex:1;padding:10px 0 8px;font-size:11px;color:var(--sub);display:flex;flex-direction:column;
-  align-items:center;gap:2px}
-.tabbar button.on{color:var(--brand-d)}
-.tabbar .ti{font-size:19px;line-height:1}
 
 .main{display:flex;flex-direction:column;min-width:0;background:var(--bg);position:relative}
 .chat-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);
@@ -115,9 +114,13 @@ a{color:var(--brand-d);text-decoration:none}
 .send-btn{padding:0 16px;height:40px;border-radius:9px;background:var(--brand);color:#fff;font-weight:600}
 .send-btn:active{background:var(--brand-d)}
 
-/* ---------- 面板（通讯录/我/设置） ---------- */
-.panel{flex:1;overflow-y:auto;padding:16px;overscroll-behavior:contain}
-.panel h2{font-size:16px;margin:0 0 12px;font-weight:600}
+/* ---------- 面板（通讯录等） ---------- */
+.panel{flex:1;overflow-y:auto;display:flex;flex-direction:column;overscroll-behavior:contain;background:var(--bg)}
+.panel-head{display:none;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);
+  border-bottom:1px solid var(--line);padding-top:calc(10px + env(safe-area-inset-top))}
+.panel-head b{flex:1;text-align:center;font-size:16px;font-weight:600}
+.panel-body{padding:16px;flex:1}
+.panel h2{font-size:15px;margin:0 0 10px;font-weight:600;color:#333}
 .card{background:var(--panel);border-radius:12px;padding:4px 0;margin-bottom:14px;overflow:hidden}
 .item{display:flex;align-items:center;gap:10px;padding:13px 14px;border-bottom:1px solid var(--line)}
 .item:last-child{border-bottom:0}
@@ -133,6 +136,28 @@ a{color:var(--brand-d);text-decoration:none}
 .mini-form{display:flex;flex-direction:column;gap:8px;padding:14px}
 .mini-form input{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--soft);outline:none}
 .mini-form .btn{padding:10px;font-size:15px}
+.mini-form label{font-size:13px;color:var(--sub)}
+
+/* ---------- 侧滑抽屉 ---------- */
+.drawer-mask{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:80;opacity:0;transition:opacity .22s ease}
+.drawer-mask.show{opacity:1}
+.drawer{width:82%;max-width:330px;height:100%;background:var(--panel);display:flex;flex-direction:column;
+  transform:translateX(-102%);transition:transform .26s cubic-bezier(.32,.72,.28,1);
+  box-shadow:2px 0 26px rgba(0,0,0,.14)}
+.drawer-mask.show .drawer{transform:translateX(0)}
+.profile-card{display:block;width:100%;text-align:left;padding:calc(26px + env(safe-area-inset-top)) 20px 22px;
+  background:linear-gradient(150deg,#0ac768 0%,#07b45c 55%,#059a4a 100%);color:#fff}
+.profile-card:active{filter:brightness(.96)}
+.profile-av{width:66px;height:66px;border-radius:18px;object-fit:cover;
+  border:2px solid rgba(255,255,255,.85);box-shadow:0 4px 14px rgba(0,0,0,.16);background:#fff}
+.profile-name{font-size:19px;font-weight:700;margin-top:12px}
+.profile-id{font-size:12px;opacity:.88;margin-top:3px}
+.drawer-nav{flex:1;overflow-y:auto;padding:8px 0}
+.drawer-nav button{display:flex;align-items:center;width:100%;padding:14px 20px;font-size:15px;text-align:left;gap:12px}
+.drawer-nav button:active{background:#f5f5f5}
+.drawer-nav .di{width:22px;text-align:center;font-size:17px}
+.drawer-nav .danger{color:var(--danger)}
+.drawer-foot{padding:14px 20px;font-size:12px;color:var(--sub);padding-bottom:calc(14px + env(safe-area-inset-bottom))}
 
 /* ---------- 弹层 ---------- */
 .mask{position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;
@@ -163,6 +188,7 @@ a{color:var(--brand-d);text-decoration:none}
   body.panel-open .sidebar{display:none}
   body.panel-open .main{display:flex}
   .chat-head{padding-left:6px}
+  .panel-head{display:flex}
 }
 @media(min-width:761px){
   .chat-head .back{display:none}
@@ -173,25 +199,55 @@ a{color:var(--brand-d);text-decoration:none}
 def _doc(title, body, extra_css="", extra_js="", base=None):
     if base is None:
         base = config.BASE or ""
+    icon = (base or "") + "/static/icon.png"
     return """<!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07c160">
+<link rel="icon" type="image/png" href="%s">
+<link rel="apple-touch-icon" href="%s">
 <title>%s</title>
 <style>%s%s</style>
 </head><body>
 %s
 <script>window.BASE=%s;</script>
 <script>%s</script>
-</body></html>""" % (title, BASE_CSS, extra_css, body, j(base), extra_js)
+</body></html>""" % (icon, icon, title, BASE_CSS, extra_css, body, j(base), extra_js)
 
 
 # ================================================================ 登录
 
 LOGIN_JS = """
 const msg = document.getElementById('msg');
+const KEY = 'kc_login_v1';
 function say(t, ok){ msg.textContent = t || ''; msg.className = 'msg-line' + (ok ? ' ok' : ''); }
+
+function encodeSaved(o){
+  try { return btoa(unescape(encodeURIComponent(JSON.stringify(o)))); } catch (e) { return ''; }
+}
+function decodeSaved(raw){
+  try { return JSON.parse(decodeURIComponent(escape(atob(raw)))); } catch (e) { return null; }
+}
+function loadSaved(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw ? decodeSaved(raw) : null;
+  } catch (e) { return null; }
+}
+function saveSaved(u, p){
+  try { localStorage.setItem(KEY, encodeSaved({ u: u, p: p })); } catch (e) {}
+}
+function clearSaved(){
+  try { localStorage.removeItem(KEY); } catch (e) {}
+}
+
+const saved = loadSaved();
+if (saved) {
+  document.getElementById('username').value = saved.u || '';
+  document.getElementById('password').value = saved.p || '';
+}
+
 document.getElementById('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const u = document.getElementById('username').value.trim();
@@ -206,6 +262,8 @@ document.getElementById('form').addEventListener('submit', async (e) => {
     });
     const d = await r.json();
     if (!d.ok) { say(d.error || '登录失败'); return; }
+    if (document.getElementById('remember').checked) saveSaved(u, p);
+    else clearSaved();
     location.href = BASE + '/';
   } catch (err) {
     say('网络异常，请重试');
@@ -219,7 +277,7 @@ document.getElementById('form').addEventListener('submit', async (e) => {
 def login_page(base=None):
     body = """
 <div class="auth-wrap"><div class="auth-card">
-  <div class="auth-logo">心</div>
+  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏 Chat">
   <h1 class="auth-title">心夏 Chat</h1>
   <p class="auth-sub">登录后继续聊天</p>
   <form id="form" autocomplete="on">
@@ -227,6 +285,7 @@ def login_page(base=None):
       <input id="username" name="username" autocomplete="username" placeholder="用户名或邮箱"></div>
     <div class="field"><label for="password">密码</label>
       <input id="password" name="password" type="password" autocomplete="current-password" placeholder="密码"></div>
+    <label class="remember"><input type="checkbox" id="remember" checked>记住账号密码（仅保存在本机）</label>
     <div class="msg-line" id="msg"></div>
     <button class="btn" id="submit" type="submit">登录</button>
   </form>
@@ -303,7 +362,7 @@ document.getElementById('form').addEventListener('submit', async (e) => {
 def register_page(base=None):
     body = """
 <div class="auth-wrap"><div class="auth-card">
-  <div class="auth-logo">心</div>
+  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏 Chat">
   <h1 class="auth-title">注册账号</h1>
   <p class="auth-sub">需要邮箱验证</p>
   <form id="form">
@@ -405,7 +464,7 @@ formB.addEventListener('submit', async (e) => {
 def recover_page(base=None):
     body = """
 <div class="auth-wrap"><div class="auth-card">
-  <div class="auth-logo">心</div>
+  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏 Chat">
   <h1 class="auth-title">找回</h1>
   <p class="auth-sub">通过邮箱验证</p>
   <div class="code-row" style="margin-bottom:14px">
@@ -440,20 +499,17 @@ def recover_page(base=None):
 
 # ================================================================ 主界面
 
-APP_BODY = """
-<div class="app" id="app">
+APP_BODY = """<div class="app" id="app">
   <aside class="sidebar">
-    <div class="side-head">
-      <span class="brand" id="side-brand">聊天</span>
-      <button class="icon-btn" id="btn-plus" data-act="plus" title="新建">＋</button>
+    <div class="side-top">
+      <button class="me-btn" data-act="drawer-open">
+        <img class="me-av" id="me-av" src="__BASE__/static/icon.png" alt="">
+        <span class="me-name" id="me-name">聊天</span>
+      </button>
+      <button class="icon-btn" data-act="plus" title="新建">＋</button>
     </div>
     <div class="side-search"><input id="search" placeholder="搜索会话" autocomplete="off"></div>
     <div class="conv-list" id="conv-list"></div>
-    <nav class="tabbar">
-      <button data-act="tab" data-tab="chats" class="on"><span class="ti">💬</span>消息</button>
-      <button data-act="tab" data-tab="contacts"><span class="ti">👥</span>通讯录</button>
-      <button data-act="tab" data-tab="me"><span class="ti">🙂</span>我的</button>
-    </nav>
   </aside>
   <main class="main">
     <section class="chat-view hidden" id="chat-view">
@@ -471,21 +527,33 @@ APP_BODY = """
     <section class="panel hidden" id="panel-view"></section>
   </main>
 </div>
+
+<div class="drawer-mask hidden" id="drawer">
+  <aside class="drawer">
+    <button class="profile-card" data-act="drawer-profile">
+      <img class="profile-av" id="drawer-av" src="__BASE__/static/icon.png" alt="">
+      <div class="profile-name" id="drawer-name"></div>
+      <div class="profile-id" id="drawer-id"></div>
+    </button>
+    <nav class="drawer-nav" id="drawer-nav"></nav>
+    <div class="drawer-foot">心夏 Chat · 轻量版</div>
+  </aside>
+</div>
 <div class="toast" id="toast"></div>
 """
 
-APP_JS = r"""
-const $ = (s, r) => (r || document).querySelector(s);
+APP_JS = r"""const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
 const COARSE = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+const ICON = BASE + '/static/icon.png';
 
 const S = {
   me: ME, convs: [], cur: null, msgs: [],
-  friends: [], blocks: [], subs: [], anns: [], tab: 'chats'
+  friends: [], blocks: [], subs: [], anns: [], view: 'chats'
 };
 
 /* ---------------- 通用 ---------------- */
@@ -532,15 +600,62 @@ function fmtDay(ts) {
   return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
 }
 
+/** 自己没设头像时用站点头像，别人没设就用名字首字。 */
+function avatarSrc(u) {
+  if (u && u.avatar) return u.avatar;
+  if (u && S.me && Number(u.id) === Number(S.me.id)) return ICON;
+  return '';
+}
+
 function avatar(u, cls) {
   cls = cls || '';
-  if (u && u.avatar) return '<div class="avatar ' + cls + '"><img src="' + esc(u.avatar) + '" alt=""></div>';
+  const src = avatarSrc(u);
+  if (src) return '<div class="avatar ' + cls + '"><img src="' + esc(src) + '" alt=""></div>';
   const name = (u && (u.display_name || u.username)) || '?';
   return '<div class="avatar ' + cls + '">' + esc(String(name).slice(0, 1)) + '</div>';
 }
 
 function displayName(u) {
   return u ? (u.display_name || u.username) : '未知';
+}
+
+/* ---------------- 侧滑抽屉 ---------------- */
+
+function renderDrawer() {
+  const me = S.me;
+  $('#drawer-av').src = avatarSrc(me) || ICON;
+  $('#drawer-name').textContent = displayName(me);
+  $('#drawer-id').textContent = '@' + me.username + (me.is_admin ? ' · 管理员' : '');
+
+  const items = [
+    ['drawer-contacts', '👥', '通讯录'],
+    ['drawer-ann', '📢', '公告板'],
+    ['drawer-password', '🔒', '修改密码'],
+    ['drawer-reload', '🔄', '刷新会话列表'],
+  ];
+  if (me.is_admin) items.push(['drawer-admin', '🛠️', '管理后台']);
+
+  let html = items.map((x) =>
+    '<button data-act="' + x[0] + '"><span class="di">' + x[1] + '</span>' + x[2] + '</button>').join('');
+  html += '<button data-act="logout" class="danger"><span class="di">🚪</span>退出登录</button>';
+  $('#drawer-nav').innerHTML = html;
+}
+
+let drawerTimer = null;
+function openDrawer() {
+  const d = $('#drawer');
+  clearTimeout(drawerTimer);
+  d.classList.remove('hidden');
+  requestAnimationFrame(() => d.classList.add('show'));
+}
+
+function closeDrawer() {
+  const d = $('#drawer');
+  d.classList.remove('show');
+  clearTimeout(drawerTimer);
+  drawerTimer = setTimeout(() => {
+    if (!d.classList.contains('show')) d.classList.add('hidden');
+  }, 280);
 }
 
 /* ---------------- 会话列表 ---------------- */
@@ -584,17 +699,20 @@ function renderConvs() {
 
 function showList() {
   document.body.classList.remove('chat-open', 'panel-open');
-  if (!S.tab || S.tab === 'chats') renderConvs();
+  S.view = 'chats';
+  const p = $('#panel-view');
+  p.classList.add('hidden');
+  $('#chat-view').classList.add('hidden');
+  renderConvs();
 }
 
-function convTitle(conv, members, meId) {
+function convTitle(conv, members) {
   if (conv.kind === 'direct') {
     const peer = conv.peer;
     return peer ? displayName(peer) : '私聊';
   }
   if (conv.kind === 'group') {
-    const mem = (members || []).length;
-    return conv.title + '（' + mem + '）';
+    return conv.title + '（' + ((members || []).length) + '）';
   }
   return conv.title || '旧频道';
 }
@@ -604,7 +722,7 @@ async function openConv(id) {
     const d = await api('/api/conversations/' + id);
     S.cur = d.conversation;
     S.cur.members = d.members || [];
-    S.cur.title = convTitle(d.conversation, d.members, S.me.id);
+    S.cur.title = convTitle(d.conversation, d.members);
     S.msgs = d.messages || [];
     $('#chat-title').textContent = S.cur.title;
     renderMsgs();
@@ -719,7 +837,7 @@ function connectSSE() {
     } else if (d.type === 'conversation_removed') {
       S.convs = S.convs.filter((c) => c.id !== d.conv_id);
       renderConvs();
-      if (S.cur && S.cur.id === d.conv_id) { S.cur = null; showList(); $('#chat-view').classList.add('hidden'); }
+      if (S.cur && S.cur.id === d.conv_id) { S.cur = null; showList(); }
     } else if (d.type === 'announcement') {
       loadAnns().then(() => popAnnouncement());
     } else if (d.type === 'friend') {
@@ -730,21 +848,15 @@ function connectSSE() {
 
 /* ---------------- 面板 ---------------- */
 
-function showPanel(html) {
+function showPanel(title, html) {
   const p = $('#panel-view');
-  p.innerHTML = html;
+  p.innerHTML = '<div class="panel-head"><button class="icon-btn back" data-act="back">‹</button><b>'
+    + esc(title) + '</b><span style="width:34px"></span></div>'
+    + '<div class="panel-body">' + html + '</div>';
   p.classList.remove('hidden');
   $('#chat-view').classList.add('hidden');
   document.body.classList.add('panel-open');
   document.body.classList.remove('chat-open');
-}
-
-function setTab(tab) {
-  S.tab = tab;
-  $$('.tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-  if (tab === 'contacts') { loadSubs().then(showContacts); }
-  else if (tab === 'me') { showMe(); }
-  else { showList(); $('#chat-view').classList.add('hidden'); $('#panel-view').classList.add('hidden'); loadConvs(true); }
 }
 
 async function loadFriends() {
@@ -752,11 +864,12 @@ async function loadFriends() {
     const d = await api('/api/friends');
     S.friends = d.friends || [];
     S.blocks = d.blocks || [];
-    if (S.tab === 'contacts') showContacts();
+    if (S.view === 'contacts') showContacts();
   } catch (e) { /* 忽略 */ }
 }
 
 function showContacts() {
+  S.view = 'contacts';
   const friendRows = S.friends.length
     ? S.friends.map((f) => '<div class="item" data-act="open-dm" data-id="' + f.id + '">'
         + avatar(f, 'sm') + '<div class="txt"><div class="t1">' + esc(displayName(f))
@@ -779,9 +892,8 @@ function showContacts() {
     : '<div class="empty" style="padding:16px">还没有子账号</div>';
 
   const isSub = S.me.is_sub === 1;
-  showPanel(
-    '<h2>通讯录</h2>'
-    + '<div class="side-search" style="padding:0 0 12px"><input id="uq" placeholder="搜索用户名加好友"></div>'
+  showPanel('通讯录',
+    '<div class="side-search" style="padding:0 0 12px"><input id="uq" placeholder="搜索用户名加好友"></div>'
     + '<div id="user-results"></div>'
     + '<h2>好友（' + S.friends.length + '）</h2><div class="card">' + friendRows + '</div>'
     + '<h2>群聊（' + groups.length + '）</h2><div class="card">' + groupRows + '</div>'
@@ -797,7 +909,6 @@ function showContacts() {
     clearTimeout(timer);
     timer = setTimeout(doSearch, 320);
   });
-  loadSubs();
 }
 
 async function loadSubs() {
@@ -825,30 +936,6 @@ async function doSearch() {
         + '</div><div class="t2">@' + esc(u.username) + '</div></div>' + btn + '</div>';
     }).join('') + '</div>';
   } catch (e) { toast(e.message); }
-}
-
-function showMe() {
-  const u = S.me;
-  showPanel(
-    '<h2>我的</h2>'
-    + '<div class="card"><div class="item" data-act="edit-profile">' + avatar(u)
-    + '<div class="txt"><div class="t1">' + esc(displayName(u)) + '</div>'
-    + '<div class="t2">@' + esc(u.username) + (u.is_admin ? ' · 管理员' : '') + '</div></div>'
-    + '<span class="arrow">›</span></div></div>'
-    + '<div class="card">'
-    + '<div class="item" data-act="ann-list"><div class="txt"><div class="t1">公告板</div>'
-    + '<div class="t2" id="ann-tip">查看所有公告</div></div><span class="arrow">›</span></div>'
-    + '<div class="item" data-act="change-pw"><div class="txt"><div class="t1">修改密码</div></div>'
-    + '<span class="arrow">›</span></div>'
-    + (u.is_admin ? '<div class="item" data-act="admin"><div class="txt"><div class="t1">管理后台</div>'
-        + '<div class="t2">用户 / 公告 / 邮件 / 服务状态</div></div><span class="arrow">›</span></div>' : '')
-    + '<div class="item" data-act="logout"><div class="txt"><div class="t1" style="color:#fa5151">退出登录</div></div></div>'
-    + '</div>'
-    + '<div class="empty" style="padding:8px">心夏 Chat · 轻量版</div>'
-  );
-  const unread = S.anns.filter((a) => !a.read).length;
-  const tip = $('#ann-tip');
-  if (tip) tip.textContent = unread ? (unread + ' 条未读公告') : '查看所有公告';
 }
 
 /* ---------------- 公告 ---------------- */
@@ -907,7 +994,7 @@ function chatSetting() {
     const myAlias = mineRow ? (mineRow.alias || '') : '';
     openSheet('聊天设置',
       '<div class="mini-form">'
-      + '<label style="font-size:13px;color:#888">备注名</label>'
+      + '<label>备注名</label>'
       + '<input id="alias-in" placeholder="给 TA 起个备注" value="' + esc(myAlias) + '">'
       + '<button class="btn" data-act="save-alias">保存备注</button>'
       + '</div>'
@@ -922,7 +1009,7 @@ function chatSetting() {
       + '</div>', '');
   } else {
     openSheet('群聊设置',
-      '<div class="mini-form"><label style="font-size:13px;color:#888">群名</label>'
+      '<div class="mini-form"><label>群名</label>'
       + '<input id="gname-in" value="' + esc(conv.title) + '">'
       + '<button class="btn" data-act="save-gname">保存群名</button></div>'
       + '<div class="card" style="margin:0 14px 14px">'
@@ -936,6 +1023,37 @@ function chatSetting() {
   }
 }
 
+/* ---------------- 表单类弹层 ---------------- */
+
+function editProfile() {
+  openSheet('编辑资料',
+    '<div class="mini-form">'
+    + '<label>显示名</label>'
+    + '<input id="dn-in" value="' + esc(S.me.display_name) + '">'
+    + '<label>头像链接（可选）</label>'
+    + '<input id="av-in" value="' + esc(S.me.avatar) + '" placeholder="https://…">'
+    + '<button class="btn" data-act="save-profile">保存</button></div>', '');
+}
+
+function changePassword() {
+  openSheet('修改密码',
+    '<div class="mini-form">'
+    + '<input id="old-pw" type="password" placeholder="原密码">'
+    + '<input id="new-pw" type="password" placeholder="新密码（≥6 位）">'
+    + '<button class="btn" data-act="save-pw">确定修改</button></div>', '');
+}
+
+async function newGroup() {
+  await loadFriends();
+  if (!S.friends.length) { toast('先加几个好友吧'); return; }
+  const rows = S.friends.map((f) => '<label class="item" style="cursor:pointer">'
+    + '<input type="checkbox" value="' + f.id + '" style="width:18px;height:18px">'
+    + avatar(f, 'sm') + '<div class="txt"><div class="t1">' + esc(displayName(f)) + '</div></div></label>').join('');
+  openSheet('发起群聊',
+    '<div class="mini-form"><input id="g-title" placeholder="群名称"></div><div class="card">' + rows + '</div>',
+    '<button class="btn" data-act="create-group">创建</button>');
+}
+
 /* ---------------- 事件 ---------------- */
 
 document.addEventListener('click', async (e) => {
@@ -945,10 +1063,16 @@ document.addEventListener('click', async (e) => {
   const id = el.getAttribute('data-id');
 
   try {
-    if (act === 'open-conv') { openConv(Number(id)); }
+    if (act === 'drawer-open') { openDrawer(); }
+    else if (act === 'drawer-contacts') { closeDrawer(); await loadSubs(); showContacts(); }
+    else if (act === 'drawer-ann') { closeDrawer(); openAnnList(); }
+    else if (act === 'drawer-password') { closeDrawer(); changePassword(); }
+    else if (act === 'drawer-reload') { closeDrawer(); await loadConvs(); toast('已刷新'); }
+    else if (act === 'drawer-admin') { location.href = BASE + '/admin'; }
+    else if (act === 'drawer-profile') { closeDrawer(); editProfile(); }
+    else if (act === 'open-conv') { openConv(Number(id)); }
     else if (act === 'back') { showList(); }
     else if (act === 'send') { sendMsg(); }
-    else if (act === 'tab') { setTab(el.getAttribute('data-tab')); }
     else if (act === 'chat-setting') { chatSetting(); }
     else if (act === 'plus') {
       openSheet('新建',
@@ -960,7 +1084,7 @@ document.addEventListener('click', async (e) => {
     else if (act === 'new-group') { document.querySelectorAll('.mask').forEach((m) => m.remove()); newGroup(); }
     else if (act === 'go-search') {
       document.querySelectorAll('.mask').forEach((m) => m.remove());
-      setTab('contacts');
+      await loadSubs(); showContacts();
       setTimeout(() => { const u = $('#uq'); if (u) u.focus(); }, 80);
     }
     else if (act === 'open-dm') {
@@ -1014,7 +1138,6 @@ document.addEventListener('click', async (e) => {
       await api('/api/conversations/' + S.cur.id + '/delete', 'POST', {});
       document.querySelectorAll('.mask').forEach((m) => m.remove());
       S.cur = null;
-      $('#chat-view').classList.add('hidden');
       await loadConvs(true);
       showList();
     }
@@ -1023,16 +1146,17 @@ document.addEventListener('click', async (e) => {
       const pass = $('#sub-pass').value;
       if (!name || pass.length < 6) { toast('子账号名必填，密码至少 6 位'); return; }
       await api('/api/subs', 'POST', { username: name, password: pass });
-      toast('子账号已创建，可用 wss://' + location.host + '/chat/ws 连接');
+      toast('子账号已创建');
+      await loadSubs();
       showContacts();
     }
     else if (act === 'del-sub') {
       if (!confirm('删除这个子账号？')) return;
       await api('/api/subs/' + id, 'DELETE');
       toast('已删除');
+      await loadSubs();
       showContacts();
     }
-    else if (act === 'ann-list') { openAnnList(); }
     else if (act === 'ann-read') {
       await api('/api/announcements/' + id + '/read', 'POST', {});
       const b = el.closest('.ann-bubble');
@@ -1040,69 +1164,25 @@ document.addEventListener('click', async (e) => {
       await loadAnns();
       setTimeout(popAnnouncement, 120);
     }
-    else if (act === 'edit-profile') { editProfile(); }
-    else if (act === 'change-pw') { changePassword(); }
-    else if (act === 'logout') {
-      await api('/api/logout', 'POST', {});
-      location.href = BASE + '/login';
-    }
-    else if (act === 'admin') { location.href = BASE + '/admin'; }
-  } catch (err) {
-    toast(err.message || '操作失败');
-  }
-});
-
-/* ---------------- 表单类弹层 ---------------- */
-
-function editProfile() {
-  openSheet('编辑资料',
-    '<div class="mini-form">'
-    + '<label style="font-size:13px;color:#888">显示名</label>'
-    + '<input id="dn-in" value="' + esc(S.me.display_name) + '">'
-    + '<label style="font-size:13px;color:#888">头像链接（可选）</label>'
-    + '<input id="av-in" value="' + esc(S.me.avatar) + '" placeholder="https://…">'
-    + '<button class="btn" data-act="save-profile">保存</button></div>', '');
-}
-
-function changePassword() {
-  openSheet('修改密码',
-    '<div class="mini-form">'
-    + '<input id="old-pw" type="password" placeholder="原密码">'
-    + '<input id="new-pw" type="password" placeholder="新密码（≥6 位）">'
-    + '<button class="btn" data-act="save-pw">确定修改</button></div>', '');
-}
-
-async function newGroup() {
-  await loadFriends();
-  if (!S.friends.length) { toast('先加几个好友吧'); return; }
-  const rows = S.friends.map((f) => '<label class="item" style="cursor:pointer">'
-    + '<input type="checkbox" value="' + f.id + '" style="width:18px;height:18px">'
-    + avatar(f, 'sm') + '<div class="txt"><div class="t1">' + esc(displayName(f)) + '</div></div></label>').join('');
-  openSheet('发起群聊',
-    '<div class="mini-form"><input id="g-title" placeholder="群名称"></div><div class="card">' + rows + '</div>',
-    '<button class="btn" data-act="create-group">创建</button>');
-}
-
-document.addEventListener('click', async (e) => {
-  const el = e.target.closest('[data-act]');
-  if (!el) return;
-  const act = el.getAttribute('data-act');
-  try {
-    if (act === 'save-profile') {
+    else if (act === 'save-profile') {
       const d = await api('/api/profile', 'POST', {
         display_name: $('#dn-in').value.trim(), avatar: $('#av-in').value.trim()
       });
       S.me = Object.assign(S.me, d.user);
+      $('#me-av').src = avatarSrc(S.me) || ICON;
+      $('#me-name').textContent = displayName(S.me);
+      renderDrawer();
       toast('已保存');
       document.querySelectorAll('.mask').forEach((m) => m.remove());
-      showMe();
-    } else if (act === 'save-pw') {
+    }
+    else if (act === 'save-pw') {
       await api('/api/password', 'POST', {
         old_password: $('#old-pw').value, new_password: $('#new-pw').value
       });
       toast('密码已修改');
       document.querySelectorAll('.mask').forEach((m) => m.remove());
-    } else if (act === 'create-group') {
+    }
+    else if (act === 'create-group') {
       const title = $('#g-title').value.trim() || '新群聊';
       const ids = $$('.sheet input[type=checkbox]:checked').map((x) => Number(x.value));
       const d = await api('/api/conversations', 'POST', { kind: 'group', title: title, member_ids: ids });
@@ -1110,10 +1190,15 @@ document.addEventListener('click', async (e) => {
       await loadConvs(true);
       openConv(d.conv_id);
     }
-  } catch (err) { toast(err.message || '操作失败'); }
+    else if (act === 'logout') {
+      if (!confirm('确定退出登录吗？')) return;
+      await api('/api/logout', 'POST', {});
+      location.href = BASE + '/login';
+    }
+  } catch (err) {
+    toast(err.message || '操作失败');
+  }
 });
-
-/* ---------------- 启动 ---------------- */
 
 $('#search').addEventListener('input', renderConvs);
 
@@ -1125,6 +1210,10 @@ $('#input').addEventListener('keydown', function (e) {
   }
 });
 
+$('#drawer').addEventListener('click', (e) => {
+  if (e.target.id === 'drawer') closeDrawer();
+});
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && S.cur) {
     api('/api/conversations/' + S.cur.id + '/read', 'POST', {}).catch(() => {});
@@ -1132,13 +1221,15 @@ document.addEventListener('visibilitychange', () => {
 });
 
 (async function boot() {
+  $('#me-av').src = avatarSrc(S.me) || ICON;
+  $('#me-name').textContent = displayName(S.me);
+  renderDrawer();
   await loadConvs(true);
   await loadFriends();
   await loadAnns();
   connectSSE();
   setTimeout(popAnnouncement, 700);
   if (window.innerWidth > 760) {
-    showList();
     $('#panel-view').classList.remove('hidden');
     $('#panel-view').innerHTML = '<div class="empty" style="padding-top:28vh">从左边选一个会话开始聊天</div>';
   }
@@ -1157,7 +1248,8 @@ def app_page(user, store=None, hub=None, base=None):
         "is_sub": int(user["is_sub"] or 0),
     }
     js = "const ME=" + j(me) + ";\n" + APP_JS + "\n"
-    return _doc("心夏 Chat", APP_BODY, extra_js=js, base=base)
+    body = APP_BODY.replace("__BASE__", base or "")
+    return _doc("心夏 Chat", body, extra_js=js, base=base)
 
 
 # ================================================================ 管理后台

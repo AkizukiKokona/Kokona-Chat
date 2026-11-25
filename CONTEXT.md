@@ -40,17 +40,22 @@ kokonachat/
 - 网页：`kc_session` Cookie；程序：`Authorization: Bearer` 或 WS 的 `?user=&pass=`。
 - 首次启动会把 `CHAT_TOKEN`（默认 `sukikokona1212`）写成管理员密码。
 - 页面注入的 `BASE` 来自 `X-Forwarded-Prefix`：
-  - `akizukikokona.com/chat/` → nginx 传 `/chat`，`proxy_pass ...:8298/`
-  - `chat.akizukikokona.com/` → nginx 传空，`proxy_pass ...:8298`
+  - `chat.akizukikokona.com/` → nginx 传空，`proxy_pass ...:8298`（**正式入口**）
+  - `akizukikokona.com/chat/` → 已 301 跳子域
   改代码时**不要**把 `BASE` 写死。
 
 ## WS 入口（已统一）
 
-`/chat/ws` 只有一个上游：新服务 8298。旧的兼容分流已删除。
+`/ws` 只有一个上游：新服务 8298。旧的兼容分流已删除。
+
+**正式地址**：`wss://chat.akizukikokona.com/ws`
+（老的 `wss://akizukikokona.com/chat/ws` 会 301，WebSocket 不跟随，等于失效）
 
 - 鉴权：`?user=用户名&pass=密码`（也认 Cookie / Bearer）
 - 协议：客户端发 `{"action":"send","conv_id":N,"text":"..."}`，服务端推 `{"type":"message",...}`
 - 旧协议（`?token=&ch=`）已废弃，插件已改，说明见 `D:\Project-Kokona\wss重适配.md`
+- PKN 协议：`pkn.hello` 由服务端下发专属会话 id（`pkn.welcome`），之后 `pkn.send` 不用带 conv_id
+- PKN 协议：`pkn.hello` 让服务端下发专属会话 id，见文档第五章
 
 **频道分配**：conv 1 = 管理员默认聊天，conv 2 = DSH 插件，conv 3 = 备用。
 旧服务 `kokona-chat.service`（8299）已停用，`/opt/kokona-chat/data/*.jsonl` 仅作归档。
@@ -73,4 +78,5 @@ nginx -t && systemctl reload nginx
 
 - **出站 25 被 VPS 上游封死**，自建 MTA 直投不可行。只能走 587/465 中继。
 - 未配 SMTP 时验证码显示在注册页 + `/admin`，对外开放注册前必须配好。
-- `chat.akizukikokona.com` 尚未加 DNS；证书也不含该子域，需 DNS 生效后跑 certbot。
+- 子域证书与主域共用一张（SAN 含 chat），由 certbot 续期；系统自带 certbot 1.12 太旧，
+  新版在 `/opt/certbot-venv/bin/certbot`，续期请用它。
