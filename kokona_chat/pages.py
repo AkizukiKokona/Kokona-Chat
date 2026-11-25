@@ -15,9 +15,12 @@ BASE_CSS = """
   --brand:#9a6c3c;--brand-d:#83582c;--danger:#c1503c;--soft:#fbf7ef;
   --bubble-me:#f4e3c4;--bubble-other:#fff;--radius:10px;
   --cover-grad:linear-gradient(150deg,#cda36c 0%,#b08050 55%,#93653a 100%);
+  --ta-max:102px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;overscroll-behavior:none}
+html{height:100%;overflow:hidden;overscroll-behavior:none}
+/* body 钉死：iOS 弹键盘时整页会被顶起来滚一段，钉住就滚不动了，白色缝隙也从源头没了 */
+body{margin:0;padding:0;height:100%;overflow:hidden;position:fixed;inset:0;overscroll-behavior:none}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
   background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
@@ -29,9 +32,10 @@ a{color:var(--brand-d);text-decoration:none}
 .hidden{display:none!important}
 
 /* ---------- 登录/注册 ---------- */
-.auth-wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px 16px;
+.auth-wrap{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;padding:24px 16px;
   background:linear-gradient(160deg,#f7efe0 0%,#f7f3ea 40%,#f7f3ea 100%)}
-.auth-card{width:100%;max-width:400px;background:var(--panel);border-radius:18px;padding:28px 22px 24px;
+/* margin:auto 居中；内容比屏幕高时自动贴顶，卡片不会被裁掉（表/矮屏也能登录） */
+.auth-card{width:100%;max-width:400px;margin:auto;background:var(--panel);border-radius:18px;padding:28px 22px 24px;
   box-shadow:0 8px 40px rgba(0,0,0,.06)}
 .auth-logo{width:72px;height:72px;border-radius:20px;object-fit:cover;display:block;
   margin:0 auto 14px;box-shadow:0 6px 20px rgba(154,108,60,.18)}
@@ -61,8 +65,10 @@ a{color:var(--brand-d);text-decoration:none}
   border:1px solid #ffe082}
 
 /* ---------- 主界面 ---------- */
+/* 默认高度就是布局视口（安卓键盘会连布局视口一起缩，CSS 天然正确）；
+   只有 iOS / adjustPan 那种「键盘盖上来、视口不缩」的情况，JS 才写 --app-h、--vv-top */
 .app{position:fixed;left:0;right:0;top:var(--vv-top,0px);display:grid;grid-template-columns:340px 1fr;
-  height:100vh;height:100dvh;height:var(--app-h,100dvh);overflow:hidden;min-height:0}
+  height:var(--app-h,100%);overflow:hidden;min-height:0}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
 .side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
 .me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
@@ -362,7 +368,7 @@ def _doc(title, body, extra_css="", extra_js="", base=None):
     return """<!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <meta name="theme-color" content="#9a6c3c">
 <link rel="icon" type="image/png" href="%s">
 <link rel="apple-touch-icon" href="%s">
@@ -1796,13 +1802,22 @@ async function saveSticker(mediaId) {
 }
 
 function autoGrow(el) {
-  const cap = parseFloat(getComputedStyle(el).maxHeight);
-  const MAX = isFinite(cap) && cap > 0 ? cap : 104;
+  if (!el) return;
+  const cs = getComputedStyle(el);
+  const cap = parseFloat(cs.maxHeight) || 102;
+  const min = parseFloat(cs.minHeight) || 40;
+  if (!el.value) {
+    el.style.height = '';
+    el.style.overflowY = 'hidden';
+    return;
+  }
+  // 先塌回 auto 才量得到真实内容高度；量完立刻写回，中间不会渲染出闪跳
   el.style.height = 'auto';
-  const h = Math.min(el.scrollHeight, MAX);
-  el.style.height = h + 'px';
-  el.style.overflowY = el.scrollHeight > MAX ? 'auto' : 'hidden';
-  if (el.scrollHeight > MAX) el.scrollTop = el.scrollHeight;
+  const h = Math.min(el.scrollHeight, cap);
+  el.style.height = Math.max(h, min) + 'px';
+  const over = el.scrollHeight > cap + 1;
+  el.style.overflowY = over ? 'auto' : 'hidden';
+  if (over) el.scrollTop = el.scrollHeight;
 }
 
 async function sendMsg() {
@@ -2752,7 +2767,7 @@ $('#chat-title').addEventListener('click', () => {
   if (peer && peer.id) openUserCard(peer);
 });
 
-$('#input').addEventListener('input', function () { autoGrow(this); });
+/* 输入框高度只在 boot() 里管：那里会避开输入法组词阶段，别在这里再挂一个 input */
 $('#input').addEventListener('keydown', function (e) {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !COARSE) {
     e.preventDefault();
@@ -2854,59 +2869,82 @@ function diagFlush(beacon) {
   await loadConvs(true);
   await loadFriends();
   await loadAnns();
-  // 移动端键盘弹起时，整页跟着 visualViewport 收缩（顶边跟着滚），
-  // 这样输入框永远停在键盘上方，消息列表也不会被顶飞。
+  // ---- 移动端键盘 ----
+  // 两种内核，两套机制，必须分开处理：
+  //   安卓 adjustResize：键盘一弹，布局视口跟着缩，CSS 的 100% 就是对的，
+  //                      JS 再写高度只会写进一个和真实可见区不一致的数——之前就是这里翻车；
+  //   iOS / adjustPan：布局视口不动，可见区被盖住，才需要 JS 把 app 高度改成可视高度。
+  // 判据：布局视口比可视视口高出 60px 以上 = 键盘是「盖」上去的，此时才接管。
   const vv = window.visualViewport;
   const root = document.documentElement;
-  let lastGoodH = 0;
-  let settled = false;
+  let applied = 'css';
   window.syncViewport = () => {
-    const raw = vv ? vv.height : window.innerHeight;
-    // 首帧的数值不可靠，等布局稳定再接管高度；在此之前用 CSS 的 100dvh
-    if (!settled) { diag('sync-early'); return; }
-    // 有些安卓内核在键盘动画中会短暂报 0，这时沿用上一次的正常高度
-    if (!raw || raw < 80) {
-      if (lastGoodH) root.style.setProperty('--app-h', lastGoodH + 'px');
-      diag('sync-skip');
+    const lh = Math.round(window.innerHeight || 0);      // 布局视口
+    const vh = vv ? Math.round(vv.height || 0) : lh;     // 可视视口
+    const top = vv ? Math.round(vv.offsetTop || 0) : 0;
+    const covered = lh - vh;
+    const overlay = lh > 0 && vh >= 80 && covered >= 60;
+    if (!overlay) {
+      // 交回 CSS：清掉 JS 写过的值，刷新那一下永远落在这条分支
+      if (applied !== 'css') {
+        applied = 'css';
+        root.style.removeProperty('--app-h');
+        root.style.removeProperty('--vv-top');
+        if (document.body.classList.contains('chat-open')) scrollBottom(true);
+        checkLayout();
+      }
+      diag('sync-css', { lh, vh, covered });
       return;
     }
-    lastGoodH = Math.round(raw);
-    root.style.setProperty('--app-h', lastGoodH + 'px');
-    // iOS 会把可视视口整体上滚，offsetTop 不跟的话 app 会停在上面、下面留白
-    const top = vv ? Math.round(vv.offsetTop || 0) : 0;
+    const key = vh + ':' + top;
+    if (key === applied) return;
+    applied = key;
+    root.style.setProperty('--app-h', vh + 'px');
     root.style.setProperty('--vv-top', top + 'px');
-    // 输入框最多占可视高度减去头部和留白，别把消息区挤没
-    const taMax = Math.max(34, Math.min(104, Math.round(raw) - 170));
-    root.style.setProperty('--ta-max', taMax + 'px');
-    root.style.setProperty('--kb', String(Math.max(0, Math.round(window.innerHeight - raw - top))) + 'px');
     if (document.body.classList.contains('chat-open')) scrollBottom(true);
-    checkLayout(raw, top);
-    diag('sync');
+    checkLayout();
+    diag('sync-kb', { lh, vh, top, covered });
   };
-  // 只在布局真的错位时上报，给以后线上排查留个探头
-  function checkLayout(raw, top) {
+  // 布局对不对，只有落在「看得见那块矩形」里才算对
+  function checkLayout() {
     const app = document.querySelector('.app');
     if (!app) return;
     const r = app.getBoundingClientRect();
-    const off = Math.abs(r.height - raw) > 2 || Math.abs(r.top - top) > 2;
+    const vh = Math.round((vv ? vv.height : window.innerHeight) || 0);
+    const top = Math.round(vv ? vv.offsetTop || 0 : 0);
     const comp = document.body.classList.contains('chat-open') ? document.querySelector('.composer') : null;
     const cr = comp && comp.getBoundingClientRect();
-    const cut = cr && cr.height > 0 && cr.bottom > top + raw + 2;
+    const off = Math.abs(r.top - top) > 3 || Math.abs(r.bottom - (top + vh)) > 3;
+    const cut = cr && cr.height > 0 && (cr.bottom > top + vh + 3 || cr.top < top - 3);
     if (off || cut) {
       diag('bad', {
         ah: Math.round(r.height), at: Math.round(r.top), ab: Math.round(r.bottom),
-        cb: cr ? Math.round(cr.bottom) : 0
+        vh, top, cb: cr ? Math.round(cr.bottom) : 0
       });
     }
   }
+  // 输入框上限按「4 行」算，跟视口高度脱钩：矮屏上也不会被压成一条缝
+  function taCap() {
+    const ta = $('#input');
+    if (!ta) return;
+    const cs = getComputedStyle(ta);
+    const fs = parseFloat(cs.fontSize) || 15;
+    const lh = parseFloat(cs.lineHeight) || Math.round(fs * 1.4);
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const cap = Math.round(lh * 4 + pad + 2);
+    root.style.setProperty('--ta-max', cap + 'px');
+    if (ta.value) autoGrow(ta);
+  }
+  taCap();
   if (vv) {
     vv.addEventListener('resize', window.syncViewport);
     vv.addEventListener('scroll', window.syncViewport);
   }
   window.addEventListener('resize', window.syncViewport);
-  window.addEventListener('orientationchange', () => setTimeout(window.syncViewport, 260));
-  setTimeout(() => { settled = true; window.syncViewport(); }, 320);
+  window.addEventListener('orientationchange', () => setTimeout(() => { taCap(); window.syncViewport(); }, 280));
   window.syncViewport();
+  // 老内核偶尔吞事件：低频对一次表，值没变就不写，不会闪
+  setInterval(() => { if (!document.hidden) window.syncViewport(); }, 800);
 
   window.addEventListener('error', (e) => diag('err', {
     msg: String(e.message || '').slice(0, 160),
@@ -2931,8 +2969,21 @@ function diagFlush(beacon) {
 
   const inputEl = $('#input');
   if (inputEl) {
+    let composing = false;
+    const grow = () => {
+      // 输入法正在组词时别碰高度：改样式会让安卓 IME 丢组合串，拼音就「打不出来」了
+      if (composing) return;
+      autoGrow(inputEl);
+    };
+    inputEl.addEventListener('compositionstart', () => { composing = true; diag('comp-start'); });
+    inputEl.addEventListener('compositionend', () => {
+      composing = false;
+      diag('comp-end');
+      setTimeout(grow, 0);
+    });
     inputEl.addEventListener('input', () => {
       diag('input');
+      grow();
       sendTyping(!!inputEl.value.trim());
       if (S.cur && S.cur.kind === 'group' && /(^|\s)@$/.test(inputEl.value)) openAtPop();
       else closeAtPop();
@@ -2940,12 +2991,13 @@ function diagFlush(beacon) {
     inputEl.addEventListener('focus', () => {
       diag('focus');
       closeTray();
-      // 键盘动画结束前 vv.height 可能是中间值，补几次校正
-      [80, 260, 560].forEach((d) => setTimeout(() => window.syncViewport && window.syncViewport(), d));
+      taCap();
+      // 键盘动画结束前 vv 是中间值，补几次校正
+      [120, 320, 600].forEach((d) => setTimeout(() => window.syncViewport && window.syncViewport(), d));
     });
     inputEl.addEventListener('blur', () => {
       diag('blur');
-      setTimeout(() => window.syncViewport && window.syncViewport(), 240);
+      setTimeout(() => window.syncViewport && window.syncViewport(), 280);
     });
   }
   const stInput = $('#st-file');

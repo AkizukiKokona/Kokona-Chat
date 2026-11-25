@@ -58,15 +58,26 @@ kokonachat/
 - 「设置」页：封面/头像、显示名、WSS 账号、改密码、公告板、退出。
 - 点好友 / 群成员 / 聊天标题 / 消息头像 → 资料卡（`openUserCard`），样式与自己的卡片一致。
   点了头像就不再弹消息时间：`.row[data-ts]` 的 toast 先判 `[data-act]`。
-- `.app` 是 `position:fixed`，高度写 `--app-h`，顶边跟 `--vv-top`，整页跟着 `visualViewport` 走。
-  **刷新那一瞬间的 `vv.height` 不可信**（安卓内核会直接报 0/半截），所以先让 CSS 的 `100dvh`
-  顶着，320ms 后（`settled`）才由 `syncViewport()` 接管；`raw < 80` 就沿用上一次的正常高度
-  （`lastGoodH`）。不这么做的话：输入栏停半空、下面一片白、点啥都没反应——这就是踩过的大坑。
-- `--vv-top` 必须跟 `vv.offsetTop`：iOS 弹键盘是把可视视口整体往上滚，不跟就停在上面、底部留白。
-  监听 `vv` 的 `resize`/`scroll`、窗口 `resize`、转屏，focus 后再补调一次。
-- `--kb` 只给浮层（权限卡、表情托盘）估键盘高度用，`.chat-view` **不再**用 `padding-bottom` 垫它。
-- 输入框上限是 `--ta-max`（`min(104, 视口高 - 170)`，最矮 34px），`autoGrow` 读计算后的
-  `max-height`；超了就在框内滚，别再让它撑高把消息列表压没。
+- **键盘只分两种内核，必须分开处理，不能一把抓**：
+  - 安卓（adjustResize，含 WebView）：键盘一弹，**布局视口跟着缩**，`height:100%` 天然正确。
+    这时 JS 绝不能写高度——之前就是拿 `vv.height` 去写 `--app-h`，而这个值在内核里可能滞后/报满高，
+    写进去就是「输入栏停半空、下面一片白、点输入框没反应、刷新即复现」。
+  - iOS / adjustPan：布局视口不动，只有可视区被盖住，才需要 JS 把 app 缩到 `vv.height`、
+    顶边跟 `vv.offsetTop`（iOS 是把可视视口整体上滚）。
+- 判据写在 `syncViewport()`：`window.innerHeight - vv.height >= 60` 才算「键盘是盖上去的」，
+  此时写 `--app-h` / `--vv-top`；否则**移除**这两个变量，把高度交回 CSS（`.app{height:var(--app-h,100%)}`）。
+  刷新那一下必然落在「移除」分支，所以刷新不会再复现。另有 800ms 低频对表，值没变不写，不会闪。
+- 别写 `100vh`：安卓地址栏收起/键盘弹起时 `vh` 不动，会多出一屏白。`dvh` 只在 Chrome 108+ 有。
+- 输入框上限 `--ta-max` = **4 行**（`行高×4 + 上下内边距`，`taCap()` 按实际字体算），
+  **不要跟视口高度挂钩**——矮屏上算出来的 `视口高-170` 会变成 34px，框被压成一条缝，
+  看着就像「打了字什么都没有」。`autoGrow` 读计算后的 `max-height`，超了框内滚。
+- **输入法组词期间（compositionstart→end）不要改 textarea 的样式**：改高度会触发重排，
+  部分安卓 IME 会丢组合串，表现为「拼音打不出来」。`grow()` 在 `composing` 时直接返回，
+  上屏后再量。输入框高度的监听只保留 `boot()` 里那一处，别再往全局挂 `input`。
+- `html{height:100%;overflow:hidden}` + `body{position:fixed;inset:0}`：把 body 钉死，
+  iOS 弹键盘时整页被顶起来滚一段的白缝也没了。登录页用 `.auth-wrap{height:100%;overflow-y:auto}`
+  + `.auth-card{margin:auto}`，矮屏可滚动，卡片不会被裁。
+- viewport meta 带 `interactive-widget=resizes-content`，让新内核明确缩布局视口（老内核忽略）。
 - 前端诊断：地址加 `?diag=1` 全量上报；触摸设备默认只在 `err` / `rej` / `bad`（布局自检发现
   错位）时上报。日志写 `data/diag/YYYYMMDD.jsonl`（8MB 轮转），管理员用 `/api/diag/read?n=200` 取。
 - 权限卡片、公告气泡的 `bottom` 要留出输入栏高度（`86px + safe-area`），否则会盖住输入框和发送键。
