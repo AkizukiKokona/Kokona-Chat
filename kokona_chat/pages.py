@@ -2762,6 +2762,73 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+/* ---------------- 诊断日志（移动端常开，写到服务端排查用） ---------------- */
+
+const DIAG = { on: false, sid: '', q: [], timer: null, last: {} };
+
+(function initDiag() {
+  const touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  DIAG.on = touch || /(^|[?&])diag=1/.test(location.search);
+  DIAG.sid = Math.random().toString(36).slice(2, 8);
+})();
+
+function diagRect(sel) {
+  const el = document.querySelector(sel);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
+}
+
+function diagSnap() {
+  const vv = window.visualViewport;
+  const ta = document.querySelector('#input');
+  const se = document.scrollingElement || document.documentElement;
+  return {
+    vw: window.innerWidth,
+    vh: window.innerHeight,
+    dh: document.documentElement.clientHeight,
+    vv: vv ? [Math.round(vv.width), Math.round(vv.height), Math.round(vv.offsetTop), Number(vv.scale.toFixed(2))] : null,
+    st: Math.round(se.scrollTop || 0),
+    kb: getComputedStyle(document.documentElement).getPropertyValue('--kb').trim(),
+    app: diagRect('.app'),
+    chat: diagRect('.chat-view'),
+    msgs: diagRect('.msgs'),
+    comp: diagRect('.composer'),
+    ta: ta ? [Math.round(ta.getBoundingClientRect().height), ta.scrollHeight, ta.selectionStart] : null,
+    ae: (document.activeElement && (document.activeElement.id || document.activeElement.tagName)) || ''
+  };
+}
+
+function diag(ev, extra) {
+  if (!DIAG.on) return;
+  const now = Date.now();
+  if (DIAG.last[ev] && now - DIAG.last[ev] < 250) return;
+  DIAG.last[ev] = now;
+  DIAG.q.push(Object.assign({ e: ev, t: now }, diagSnap(), extra || {}));
+  if (DIAG.q.length > 160) DIAG.q.shift();
+  if (!DIAG.timer) DIAG.timer = setTimeout(function () { diagFlush(false); }, 1600);
+}
+
+function diagFlush(beacon) {
+  clearTimeout(DIAG.timer);
+  DIAG.timer = null;
+  if (!DIAG.q.length) return;
+  const body = JSON.stringify({ sid: DIAG.sid, events: DIAG.q.splice(0) });
+  try {
+    if (beacon && navigator.sendBeacon) {
+      navigator.sendBeacon(BASE + '/api/diag', new Blob([body], { type: 'application/json' }));
+    } else {
+      fetch(BASE + '/api/diag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body,
+        keepalive: true,
+        cache: 'no-store'
+      }).catch(function () {});
+    }
+  } catch (e) { /* 诊断失败不影响聊天 */ }
+}
+
 (async function boot() {
   $('#me-av').src = avatarSrc(S.me) || ICON;
   $('#me-name').textContent = displayName(S.me);
@@ -2785,6 +2852,7 @@ document.addEventListener('visibilitychange', () => {
     }
     root.style.setProperty('--kb', Math.round(kb) + 'px');
     if (document.body.classList.contains('chat-open')) scrollBottom(true);
+    diag('sync');
   };
   if (vv) {
     vv.addEventListener('resize', window.syncViewport);
@@ -2794,19 +2862,43 @@ document.addEventListener('visibilitychange', () => {
   window.addEventListener('orientationchange', () => setTimeout(window.syncViewport, 260));
   window.syncViewport();
 
+  window.addEventListener('error', (e) => diag('err', {
+    msg: String(e.message || '').slice(0, 160),
+    ln: e.lineno,
+  }));
+  window.addEventListener('unhandledrejection', (e) => diag('rej', {
+    msg: String((e.reason && e.reason.message) || e.reason || '').slice(0, 160),
+  }));
+  document.addEventListener('visibilitychange', () => {
+    diag('vis', { s: document.visibilityState });
+    if (document.visibilityState === 'hidden') diagFlush(true);
+  });
+  window.addEventListener('pagehide', () => { diag('hide'); diagFlush(true); });
+  setTimeout(() => diag('boot', {
+    ua: navigator.userAgent,
+    dpr: window.devicePixelRatio,
+    scr: [screen.width, screen.height],
+    sa: navigator.standalone ? 1 : 0,
+  }), 60);
+  setTimeout(() => diag('t1'), 1200);
+  setTimeout(() => diag('t3'), 3200);
+
   const inputEl = $('#input');
   if (inputEl) {
     inputEl.addEventListener('input', () => {
+      diag('input');
       sendTyping(!!inputEl.value.trim());
       if (S.cur && S.cur.kind === 'group' && /(^|\s)@$/.test(inputEl.value)) openAtPop();
       else closeAtPop();
     });
     inputEl.addEventListener('focus', () => {
+      diag('focus');
       closeTray();
       // 键盘动画结束前 vv.height 可能是中间值，补几次校正
       [80, 260, 560].forEach((d) => setTimeout(() => window.syncViewport && window.syncViewport(), d));
     });
     inputEl.addEventListener('blur', () => {
+      diag('blur');
       setTimeout(() => window.syncViewport && window.syncViewport(), 240);
     });
   }

@@ -24,6 +24,7 @@ AVATAR_DIR = os.path.join(config.DATA_DIR, "avatars")
 COVER_DIR = os.path.join(config.DATA_DIR, "covers")
 GROUP_DIR = os.path.join(config.DATA_DIR, "groups")
 MEDIA_DIR = os.path.join(config.DATA_DIR, "media")
+DIAG_DIR = os.path.join(config.DATA_DIR, "diag")
 MAX_MEDIA_BYTES = 800 * 1024
 HISTORY_CHOICES = (200, 300, 500, 1000)
 MAX_AVATAR_BYTES = 400 * 1024
@@ -723,6 +724,46 @@ def api_push_key(c):
     c.need_login()
     key = push.public_key()
     return ok(key=key, enabled=bool(key))
+
+
+@route("POST", "/api/diag")
+def api_diag(c):
+    """前端诊断日志：按天追加到 data/diag/，只留最近两份。"""
+    user = c.need_login()
+    events = c.arg("events") or []
+    if not isinstance(events, list) or not events:
+        return ok()
+    sid = str(c.arg("sid") or "")[:12]
+    os.makedirs(DIAG_DIR, exist_ok=True)
+    path = os.path.join(DIAG_DIR, time.strftime("%Y%m%d") + ".jsonl")
+    try:
+        if os.path.getsize(path) > 8 * 1024 * 1024:
+            os.replace(path, path + ".1")
+    except OSError:
+        pass
+    uid = int(user["id"])
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            for ev in events[:200]:
+                line = json.dumps({"uid": uid, "sid": sid, "ev": ev}, ensure_ascii=False)
+                fh.write(line[:2000] + chr(10))
+    except OSError:
+        pass
+    return ok()
+
+
+@route("GET", "/api/diag/read")
+def api_diag_read(c):
+    """管理员看最近日志，方便直接贴给我。"""
+    c.need_admin()
+    n = max(1, min(2000, int(c.q("n", "200") or 200)))
+    path = os.path.join(DIAG_DIR, time.strftime("%Y%m%d") + ".jsonl")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            lines = fh.readlines()[-n:]
+    except OSError:
+        lines = []
+    return ok(lines=[x.rstrip(chr(10)) for x in lines])
 
 
 @route("POST", "/api/push/subscribe")
