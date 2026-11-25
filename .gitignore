@@ -19,3 +19,9 @@ Thumbs.db
 venv/
 .env
 settings.local.*
+
+# 本地测试实例的数据与 cookie
+.testrun/
+.testdata/
+.ck
+.ck2

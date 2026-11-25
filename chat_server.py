@@ -27,7 +27,10 @@ from urllib.parse import parse_qs, urlparse
 
 TOKEN = os.environ.get("CHAT_TOKEN", "sukikokona1212")
 PORT = int(os.environ.get("CHAT_PORT", "8299"))
-HISTORY_MAX = int(os.environ.get("CHAT_HISTORY", "300"))
+# 内存里每频道只留最近 100 条：这是推给浏览器（SSE）和 A 端（WS）的全部历史。
+# 弱网 / 低性能设备一次收太多会卡死，重连还得重发一遍——所以超出的直接丢，
+# 不做「更早消息」的补拉。需要更多请调 CHAT_HISTORY 环境变量。
+HISTORY_MAX = int(os.environ.get("CHAT_HISTORY", "100"))
 CHANNELS_FILE = os.environ.get("CHAT_CHANNELS_FILE", "/opt/kokona-chat/channels.json")
 DATA_DIR = os.environ.get("CHAT_DATA_DIR", "/opt/kokona-chat/data")
 FSYNC = os.environ.get("CHAT_FSYNC", "1") not in ("0", "false", "no")
@@ -74,7 +77,7 @@ class MessageStore(object):
     """追加写 + 尾部读。单进程使用，写操作自带锁。"""
 
     MAX_BYTES = 4 * 1024 * 1024      # 单文件超 4MB 触发压缩
-    KEEP_LINES = 2000                # 压缩后保留最后多少条
+    KEEP_LINES = 100                 # 压缩后只保留最后 100 条（与内存窗口一致）
 
     def __init__(self, root):
         self.root = root
@@ -226,17 +229,21 @@ def publish(ch, sender, text):
         ws_targets = list(ch.ws) if sender == "B" else []
         sse_targets = list(ch.sse)
 
-    payload = json.dumps(msg, ensure_ascii=False)
-    if _store is not None:
-        try:
-            _store.append(msg)       # 先落盘再广播：发出去的一定留得住
-        except Exception:
-            pass
-    for q in sse_targets:
-        try:
-            q.put_nowait(payload)
-        except queue.Full:
-            pass
+        payload = json.dumps(msg, ensure_ascii=False)
+        # 落盘 + SSE 推送都放在锁内：并发 publish 时 id 顺序、磁盘顺序、
+        # 浏览器收到的顺序才一致。消息量很小，串行化的代价可以忽略。
+        if _store is not None:
+            try:
+                _store.append(msg)       # 先落盘再广播：发出去的一定留得住
+            except Exception:
+                pass
+        for q in sse_targets:
+            try:
+                q.put_nowait(payload)
+            except queue.Full:
+                pass
+
+    # WS（A 端）发送留在锁外：sendall 可能被慢客户端拖住，不能占着全局锁。
     for c in ws_targets:
         try:
             c["h"].ws_send_json(c, payload)
@@ -651,7 +658,8 @@ function renderMd(src){
 
   // ---------- 本地缓存 ----------
   var CACHE_KEY = 'kokona_chat_' + ch;
-  var CACHE_MAX = 200;
+  var CACHE_MAX = 100;      // 本地缓存也只留最近 100 条，低端设备别撑爆 localStorage
+  var DOM_MAX = 100;        // 消息列表最多挂 100 个节点，多的从最旧开始摘掉
   var seen = {};            // msg.id -> 1，用于去重（缓存 + SSE 重发）
   var cacheMsgs = [];
   var saveTimer = null;
@@ -733,6 +741,19 @@ function renderMd(src){
     return /(本轮|轮次|这一轮|这轮)/.test(t) && /(结束|完成|收尾)/.test(t);
   }
 
+  // 时间：今天只给时分；跨天补日期；跨年再补年份。
+  // 之前只给时分，凌晨的消息根本分不清是哪天。
+  function fmtClock(t){
+    var now = new Date();
+    var hm = t.toLocaleTimeString('zh-CN', {hour12: false});
+    if (t.getFullYear() === now.getFullYear()
+        && t.getMonth() === now.getMonth()
+        && t.getDate() === now.getDate()) return hm;
+    var md = (t.getMonth() + 1) + '月' + t.getDate() + '日';
+    if (t.getFullYear() === now.getFullYear()) return md + ' ' + hm;
+    return t.getFullYear() + '年' + md + ' ' + hm;
+  }
+
   function buildMsgEl(msg){
     var el = document.createElement('div');
     if (isTurnEnd(msg.text)) {
@@ -744,14 +765,29 @@ function renderMd(src){
     var meta = document.createElement('span');
     meta.className = 'meta';
     var t = new Date(msg.ts);
-    meta.textContent = (msg.from === 'B' ? NAME_B : NAME_A) + ' · ' +
-      t.toLocaleTimeString('zh-CN', {hour12: false});
+    meta.textContent = (msg.from === 'B' ? NAME_B : NAME_A) + ' · ' + fmtClock(t);
     var body = document.createElement('span');
     body.innerHTML = renderMd(msg.text);
     el.appendChild(meta);
     el.appendChild(body);
     if (msg.from === 'B') mineEls.push(el);
     return el;
+  }
+
+  // 按 id 有序插入：服务端并发推送、缓存回填都可能把大 id 先送到。
+  // 常见情况（新消息 id 最大）走 append，只有乱序时才去扫位置。
+  function insertOrdered(el, id){
+    var nodes = log.querySelectorAll('.msg[data-id], .md-turn[data-id]');
+    if (nodes.length === 0) { log.appendChild(el); return; }
+    var lastId = Number(nodes[nodes.length - 1].getAttribute('data-id'));
+    if (id >= lastId) { log.appendChild(el); return; }
+    for (var i = 0; i < nodes.length; i++) {
+      if (Number(nodes[i].getAttribute('data-id')) > id) {
+        log.insertBefore(el, nodes[i]);
+        return;
+      }
+    }
+    log.appendChild(el);
   }
 
   function appendMsg(msg, live){
@@ -769,7 +805,8 @@ function renderMd(src){
     }
 
     el.setAttribute('data-id', msg.id);
-    log.appendChild(el);
+    insertOrdered(el, msg.id);
+    trimDom();
 
     if (live) {
       if (atBottom) {
@@ -783,6 +820,23 @@ function renderMd(src){
       }
     }
     return el;
+  }
+
+  // 只留最近 DOM_MAX 条：低端设备上节点越堆越卡。
+  // 只在用户停在底部时裁，避免往上翻历史时内容突然变短、位置乱跳。
+  function trimDom(){
+    if (!atBottom) return;
+    var nodes = log.querySelectorAll('.msg[data-id], .md-turn[data-id]');
+    var extra = nodes.length - DOM_MAX;
+    if (extra <= 0) return;
+    for (var i = 0; i < extra; i++) {
+      var n = nodes[i];
+      if (!n || !n.parentNode) continue;
+      var mi = mineEls.indexOf(n);
+      if (mi >= 0) mineEls.splice(mi, 1);
+      if (n === firstUnreadEl) firstUnreadEl = null;
+      n.parentNode.removeChild(n);
+    }
   }
 
   // ---------- 从缓存恢复 ----------
@@ -817,10 +871,41 @@ function renderMd(src){
   var received = 0;
   var firstBatch = true;      // 刚打开时的历史批次：不逐条滚动，静默后统一到底
   var batchTimer = null;
+  var liveMsgs = {};          // 服务端推来的消息（按 id），endBatch 用它重建列表
+
+  /**
+   * 以服务端为准重建列表。
+   * 缓存只负责「首屏秒开」，服务端首批到达后就必须让位——
+   * 否则缓存里那些服务端已经裁掉的旧消息会一直挂着，刷新几次就冒出来。
+   */
+  function rebuildFromServer(){
+    var arr = [];
+    for (var id in liveMsgs) {
+      if (Object.prototype.hasOwnProperty.call(liveMsgs, id)) arr.push(liveMsgs[id]);
+    }
+    if (arr.length === 0) return;
+    arr.sort(function(a, b){ return a.id - b.id; });
+
+    log.innerHTML = '';
+    mineEls.length = 0;
+    firstUnreadEl = null;
+    cacheMsgs = [];
+    seen = {};
+    for (var i = 0; i < arr.length; i++) {
+      var m = arr[i];
+      if (!m || m.id == null) continue;
+      seen[m.id] = 1;
+      cacheMsgs.push(m);
+      appendMsg(m, false);
+    }
+    saveCache();
+  }
 
   function endBatch(){
     if (!firstBatch) return;
     firstBatch = false;
+    rebuildFromServer();
+    liveMsgs = {};          // 重建完就释放；下次重连 onopen 会再建
     scrollBottom(false);
     atBottom = true;
     updateJumps();
@@ -829,13 +914,31 @@ function renderMd(src){
   }
 
   var es = new EventSource('/chat/stream?ch=' + encodeURIComponent(ch));
+
+  // 网络类的 toast 要节流，免得断线时反复重连刷屏。
+  var lastNetToast = 0;
+  function netToast(text, ms){
+    var now = Date.now();
+    if (now - lastNetToast < 5000) return;
+    lastNetToast = now;
+    showToast(text, false, ms || 2600);
+  }
+
   es.onopen = function(){
     statusEl.textContent = '已连接 · ' + NAME_B;
     statusEl.classList.add('on');
+    // 每次（重）连都重新对账：服务端会重推最近 100 条，以它为准重建列表。
+    firstBatch = true;
+    liveMsgs = {};
+    clearTimeout(batchTimer);
+    // 网络恢复：把弱网时攒下的消息补发出去
+    flushOut();
   };
   es.onerror = function(){
     statusEl.textContent = '重连中…';
     statusEl.classList.remove('on');
+    // 收不到消息时如实告诉用户，别装正常
+    netToast('网络不稳定，可能收不到新消息，正在重连…');
   };
 
   es.addEventListener('meta', function(e){
@@ -847,6 +950,7 @@ function renderMd(src){
         if (cacheMsgs.length) {
           cacheMsgs.length = 0;
           seen = {};
+          liveMsgs = {};
           mineEls.length = 0;
           unread = 0; firstUnreadEl = null;
           log.innerHTML = '<p class="empty" id="empty">这个频道还没有消息<br>把 WS 地址交给心夏就能开聊</p>';
@@ -866,6 +970,7 @@ function renderMd(src){
     if (!msg || msg.id == null) return;
 
     received++;
+    if (firstBatch) liveMsgs[msg.id] = msg;   // 只在首批期间留存，供 endBatch 重建
     if (!seen[msg.id]) {
       seen[msg.id] = 1;
       cacheMsgs.push(msg);
@@ -900,22 +1005,90 @@ function renderMd(src){
     }
   });
 
-  // ---- 发送 ----
+  // ---- 发送（弱网可靠投递）----
+  // 发不出去不丢：进队列，弹 toast，等网络恢复（online / SSE 重连成功）自动重发。
+  var pendingOut = [];
+  var sending = false;
+
+  function deliver(item){
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var timer = null;
+    if (ctrl) timer = setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 12000);
+    return fetch('/chat/send?ch=' + encodeURIComponent(item.ch), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: item.text}),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function(r){
+      // fetch 只有网络层失败才 reject；HTTP 500 一样算没发出去。
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (timer) clearTimeout(timer);
+      return r;
+    }, function(err){
+      if (timer) clearTimeout(timer);
+      throw err;
+    });
+  }
+
+  var retryDelay = 3000;
+  var retryTimer = null;
+
+  function scheduleRetry(){
+    if (retryTimer !== null) return;
+    retryDelay = Math.min(Math.round(retryDelay * 1.8), 30000);
+    retryTimer = setTimeout(function(){
+      retryTimer = null;
+      flushOut();
+    }, retryDelay);
+  }
+
+  function flushOut(){
+    if (sending || pendingOut.length === 0) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      // 已经 offline 了，事件里提示过，这里安静等恢复
+      scheduleRetry();
+      return;
+    }
+    sending = true;
+    var item = pendingOut[0];
+    deliver(item).then(function(){
+      pendingOut.shift();
+      sending = false;
+      retryDelay = 3000;
+      if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
+      showToast('已发送', true, 1000);
+      atBottom = true; unread = 0; firstUnreadEl = null;
+      scrollBottom(true); updateJumps();
+      flushOut();
+    }).catch(function(){
+      sending = false;
+      statusEl.textContent = '发送失败，待重发';
+      statusEl.classList.remove('on');
+      // 同一条只警告一次，后续靠退避重试，不刷屏
+      if (!item.warned) {
+        item.warned = true;
+        netToast('消息没发出去，已存下，网络恢复后自动重发', 3000);
+      }
+      scheduleRetry();
+    });
+  }
+
+  window.addEventListener('online', function(){
+    showToast('网络已恢复，正在重发…', true, 1500);
+    flushOut();
+  });
+  window.addEventListener('offline', function(){
+    netToast('网络断开，消息会先存着', 2600);
+  });
+
   document.getElementById('form').addEventListener('submit', function(e){
     e.preventDefault();
     var text = input.value.trim();
     if (!text) return;
     input.value = '';
     autoGrow();
-    fetch('/chat/send?ch=' + encodeURIComponent(ch), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text: text})
-    }).then(function(){
-      // 自己发完一定回到最新处
-      atBottom = true; unread = 0; firstUnreadEl = null;
-      scrollBottom(true); updateJumps();
-    }).catch(function(){ statusEl.textContent = '发送失败'; });
+    pendingOut.push({text: text, ch: ch});
+    flushOut();
     input.focus();
   });
 

@@ -4,67 +4,73 @@
 
 ## 一句话
 
-单文件、零依赖的 A/B 双端聊天：WebSocket 连进来是「心夏」，浏览器打开是「秋月不会解梦」，支持多频道、消息落盘、Markdown 渲染。
+`kokona_chat` 是一个零第三方依赖（标准库 + SQLite）的轻量 IM：账号体系、邮箱验证、好友、群聊、
+子账号（wss）、公告、管理后台。旧的单文件 `chat_server.py` 保留为「老 WS 客户端兼容服务」。
 
 ## 结构
 
 ```
 kokonachat/
-├── chat_server.py      # 全部实现（~1200 行），HTTP + SSE + WebSocket + 存储 + 页面
-├── deploy/
-│   ├── kokona-chat.service
-│   └── nginx-chat.conf
-└── data/               # 运行期生成，不入库：ch-<id>.jsonl
+├── run.py                 启动入口
+├── kokona_chat/
+│   ├── config.py          全部配置（环境变量可覆盖）
+│   ├── db.py              SQLite 建表 / 迁移
+│   ├── auth.py            PBKDF2 密码、登录态、邮箱验证码
+│   ├── mailer.py          发信（SMTP 可配，未配置则降级到页面/后台可见）
+│   ├── store.py           会话 / 消息 / 好友 / 黑名单 / 公告
+│   ├── hub.py             SSE + WebSocket 广播中心
+│   ├── wskit.py           RFC6455 帧
+│   ├── server.py          HTTP 路由 / API / SSE / WS
+│   └── pages.py           全部页面（内联 CSS/JS，亮色，移动优先）
+├── chat_server.py         旧版单文件（8299，老 WS 客户端专用）
+└── data/chat.db           运行后生成
 ```
 
-`chat_server.py` 内部顺序：存储 `MessageStore` → `Channel` → 页面常量 `PAGE`/`LOGIN_PAGE` → `Handler`（GET/POST/SSE/WS）。
+## 必须守住的规则
 
-## 端点
+1. **云端每个会话只留最近 100 条**（`CHAT_HISTORY`）。插入时立即删旧的，别改成「查的时候才截」。
+2. **私聊唯一**：`conversations.dm_key = "小id:大id"` + 唯一索引。别用「查成员集合」来判重。
+3. **只能和好友私聊**；被拉黑 / 被封禁一律拒绝，返回中文原因。
+4. **子账号（`is_sub=1`）** 只能和主账号聊，不能加好友 / 建群 / 建子账号。
+5. **legacy 频道 1/2/3** 的 id 永远占位，只有管理员能进。
+6. 主管理员 `akizukikokona` 不可被封禁。
 
-| 路径 | 说明 |
-|---|---|
-| `GET /chat/`、`/chat/<id>/` | 页面，未登录给登录页 |
-| `POST /chat/login` | token 换 cookie（HttpOnly，365 天） |
-| `GET /chat/ws?token=&ch=` | WebSocket（A 端），JSON 或纯文本 |
-| `GET /chat/stream?ch=` | SSE（B 端），首帧是 `event: meta` |
-| `POST /chat/send?ch=` | 发消息 `{"text": "..."}` |
-| `GET /chat/history?ch=` | 历史 |
-| `GET/POST /chat/channels*` | 列表 / 新建 / 改名 / 清空 |
-| `POST /chat/log` | 前端异常上报（免 token） |
+## 鉴权与挂载
 
-鉴权：query `token`、`X-Token`、`Authorization: Bearer`、cookie 四选一。
+- 网页：`kc_session` Cookie；程序：`Authorization: Bearer` 或 WS 的 `?user=&pass=`。
+- 首次启动会把 `CHAT_TOKEN`（默认 `sukikokona1212`）写成管理员密码。
+- 页面注入的 `BASE` 来自 `X-Forwarded-Prefix`：
+  - `akizukikokona.com/chat/` → nginx 传 `/chat`，`proxy_pass ...:8298/`
+  - `chat.akizukikokona.com/` → nginx 传空，`proxy_pass ...:8298`
+  改代码时**不要**把 `BASE` 写死。
 
-## 部署（改完必须做）
+## WS 分流（不能删）
+
+`/etc/nginx/conf.d/chat-ws-split.conf`：
+
+```
+map $arg_token $chat_ws_backend { default 127.0.0.1:8299; "" 127.0.0.1:8298; }
+```
+
+带 `token` 参数的是旧的 DSH/QQ 桥接程序 → 老服务；不带的是新网页 → 新服务。
+
+## 消息顺序
+
+服务端 `id` 自增、`created_at` 单调；前端按 id 有序插入，重连后以服务端为准重建列表。
+**不要**改回「先到先 append」。
+
+## 部署
 
 ```bash
-cd D:/kokonachat && python -m py_compile chat_server.py
-scp chat_server.py root@<host>:/opt/kokona-chat/
-ssh root@<host> 'cd /opt/kokona-chat && python3 -m py_compile chat_server.py && systemctl restart kokona-chat'
+systemctl restart kokona-im     # 新服务 8298
+systemctl restart kokona-chat   # 旧服务 8299（老 WS 客户端）
+nginx -t && systemctl reload nginx
 ```
 
-nginx 反代在 `/etc/nginx/sites-available/akizukikokona.com` 的 `location /chat/`，**SSE 必须 `proxy_buffering off`**。
+备份文件：`/etc/nginx/sites-available/akizukikokona.com.bak-*`
 
-## 改前端时的铁律
+## 已知限制
 
-1. **页面 JS 有两个 `<script>` 块**：第一个是 Markdown 渲染器，第二个是业务 IIFE。用正则替换时要区分，别只改第一个。
-2. **接口一律写绝对路径 `/chat/xxx`**。曾经用相对路径，导致 `/chat/2/` 下请求变成 `/chat/2/channels` 全挂。
-3. **UI 的关键行为不能依赖可选事件**。曾经把"是否滚动到底"绑在 SSE 的 `meta` 事件上，meta 一丢就永远不滚动，看起来像消息消失。现在用「350ms 静默」判定批次结束。
-4. **HTML 先转义再渲染 Markdown**，链接只放行 `http(s)/mailto`。
-5. 页面响应带 `no-store`，改完让用户刷新即可，不用强刷。
-
-## 存储
-
-每频道一个 `data/ch-<id>.jsonl`，一行一条。追加 + `fsync`，启动时从文件尾反向读最近 300 条进内存。超 4MB 自动压缩保留 2000 条。损坏行直接跳过。
-
-## 本地验证技巧
-
-- `curl -b <cookiejar>` 才拿得到真实页面，否则只有登录页
-- 测 URL 参数必须用 `%2F` 编码 —— **Git Bash 会把 `/chat/2/` 转成 `C:/Program Files/.../chat/2/`**
-- Edge headless 在用户开着浏览器时会静默失败（截图 0 字节），此时改用 `node --check` 验语法
-- 提取页面 JS 做单测：`re.findall(r"<script>(.*?)</script>", src, re.S)` 取第 2 块，`node --check` + eval
-
-## 已知边界
-
-- 内存 300 条 / 磁盘更多，`/chat/history` 只回内存那批
-- 单进程写锁，不支持多实例同时写
-- 页面与接口都要 token，A 端用 `?token=`
+- **出站 25 被 VPS 上游封死**，自建 MTA 直投不可行。只能走 587/465 中继。
+- 未配 SMTP 时验证码显示在注册页 + `/admin`，对外开放注册前必须配好。
+- `chat.akizukikokona.com` 尚未加 DNS；证书也不含该子域，需 DNS 生效后跑 certbot。
