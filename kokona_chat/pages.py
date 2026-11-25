@@ -104,10 +104,10 @@ a{color:var(--brand-d);text-decoration:none}
 .row{display:flex;margin-bottom:12px;align-items:flex-start;gap:8px}
 .row.me{flex-direction:row-reverse}
 .bubble{max-width:min(74%,560px);padding:9px 12px;border-radius:var(--radius);background:var(--bubble-other);
-  word-break:break-word;white-space:pre-wrap;box-shadow:0 1px 1px rgba(0,0,0,.04);position:relative}
+  word-break:break-word;white-space:pre-wrap;box-shadow:0 1px 1px rgba(0,0,0,.04);position:relative;
+  cursor:pointer}
 .row.me .bubble{background:var(--bubble-me)}
 .b-meta{font-size:11px;color:var(--sub);margin-bottom:3px}
-.b-time{font-size:10px;color:var(--sub);margin-top:3px;text-align:right}
 .sys{text-align:center;font-size:12px;color:var(--sub);margin:10px 0}
 .composer{display:flex;gap:8px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);
   align-items:flex-end;flex:0 0 auto;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
@@ -666,6 +666,35 @@ function fmtDay(ts) {
   return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
 }
 
+function hhmm(ts) {
+  const d = new Date(ts * 1000);
+  return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+/** 居中那条小条：日期 + 时刻，例如「今天 14:32」。 */
+function fmtSep(ts) {
+  return fmtDay(ts) + ' ' + hhmm(ts);
+}
+
+/** 点消息弹 toast 时用的完整时间。 */
+function fmtFull(ts) {
+  const d = new Date(ts * 1000);
+  const y = d.getFullYear();
+  const md = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  const day = (y === new Date().getFullYear()) ? md : y + '年' + md;
+  return day + ' ' + hhmm(ts);
+}
+
+/** 消息间隔超过 5 分钟（或跨天）才重新插一条时间小条。 */
+const SEP_GAP = 5 * 60;
+
+function needSep(prev, cur) {
+  if (!prev) return true;
+  const a = new Date(prev.created_at * 1000), b = new Date(cur.created_at * 1000);
+  if (a.toDateString() !== b.toDateString()) return true;
+  return (cur.created_at - prev.created_at) >= SEP_GAP;
+}
+
 /** 头像地址：av:xxx 走服务端头像接口；兼容老的 http(s) 链接；没设返回空串。 */
 function avatarSrc(u) {
   const a = String((u && u.avatar) || '');
@@ -837,10 +866,9 @@ async function openConv(id) {
 function msgHtml(m) {
   const mine = S.me && m.sender_id === S.me.id;
   const who = mine ? '' : '<div class="b-meta">' + esc(displayName(m.sender)) + '</div>';
-  return '<div class="row' + (mine ? ' me' : '') + '" data-mid="' + m.id + '">'
+  return '<div class="row' + (mine ? ' me' : '') + '" data-mid="' + m.id + '" data-ts="' + m.created_at + '">'
     + avatar(m.sender, 'sm')
-    + '<div class="bubble">' + who + esc(m.body)
-    + '<div class="b-time">' + fmtClock(m.created_at) + '</div></div></div>';
+    + '<div class="bubble">' + who + esc(m.body) + '</div></div>';
 }
 
 function renderMsgs() {
@@ -849,15 +877,14 @@ function renderMsgs() {
     box.innerHTML = '<div class="empty">还没有消息，打个招呼吧</div>';
     return;
   }
-  let html = '', lastDay = '';
+  let html = '', prev = null;
   for (let i = 0; i < S.msgs.length; i++) {
     const m = S.msgs[i];
-    const day = new Date(m.created_at * 1000).toDateString();
-    if (day !== lastDay) {
-      lastDay = day;
-      html += '<div class="day-sep"><span>' + fmtDay(m.created_at) + '</span></div>';
+    if (needSep(prev, m)) {
+      html += '<div class="day-sep"><span>' + fmtSep(m.created_at) + '</span></div>';
     }
     html += msgHtml(m);
+    prev = m;
   }
   box.innerHTML = html;
 }
@@ -879,9 +906,8 @@ function appendMsg(m) {
   const stick = nearBottom();
   const prev = S.msgs[S.msgs.length - 1];
   S.msgs.push(m);
-  const day = new Date(m.created_at * 1000).toDateString();
-  if (!prev || new Date(prev.created_at * 1000).toDateString() !== day) {
-    box.insertAdjacentHTML('beforeend', '<div class="day-sep"><span>' + fmtDay(m.created_at) + '</span></div>');
+  if (needSep(prev, m)) {
+    box.insertAdjacentHTML('beforeend', '<div class="day-sep"><span>' + fmtSep(m.created_at) + '</span></div>');
   }
   box.insertAdjacentHTML('beforeend', msgHtml(m));
   if (stick) scrollBottom(true);
@@ -1431,6 +1457,13 @@ async function newGroup() {
 }
 
 /* ---------------- 事件 ---------------- */
+
+/* 点一条消息：弹出它的完整时间（气泡上不再挂小字） */
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('.row[data-ts]');
+  if (!row) return;
+  toast(fmtFull(Number(row.getAttribute('data-ts'))));
+});
 
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
