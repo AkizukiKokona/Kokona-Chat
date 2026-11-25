@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
   email         TEXT UNIQUE,
   role          TEXT NOT NULL DEFAULT 'user',       -- admin / user
   avatar        TEXT NOT NULL DEFAULT '',
+  cover         TEXT NOT NULL DEFAULT '',            -- 资料卡封面，cv:<文件名>
   is_sub        INTEGER NOT NULL DEFAULT 0,         -- 1 = 子账号(wss)
   parent_id     INTEGER,                            -- 子账号归属的主账号
   status        TEXT NOT NULL DEFAULT 'active',     -- active / banned
@@ -174,6 +175,16 @@ def _migrate():
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_dm "
         "ON conversations(dm_key) WHERE dm_key IS NOT NULL"
     )
+
+    ucols = {row["name"] for row in qall("PRAGMA table_info(users)")}
+    if "cover" not in ucols:
+        run("ALTER TABLE users ADD COLUMN cover TEXT NOT NULL DEFAULT ''")
+
+    # 子账号不再单独占一个用户名：统一改成隐藏名 ~sub:<id>，
+    # 对外只认「主账号用户名 + 子账号密码」。
+    for row in qall("SELECT id, username, is_sub FROM users WHERE is_sub = 1"):
+        if not str(row["username"]).startswith("~sub:"):
+            run("UPDATE users SET username = ? WHERE id = ?", ("~sub:%d" % int(row["id"]), int(row["id"])))
 
 
 def _ensure_admin():

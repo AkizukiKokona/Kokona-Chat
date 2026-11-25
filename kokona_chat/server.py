@@ -20,7 +20,9 @@ HUB = hub.Hub()
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 # 用户头像单独放数据目录，跟只读的代码目录分开
 AVATAR_DIR = os.path.join(config.DATA_DIR, "avatars")
+COVER_DIR = os.path.join(config.DATA_DIR, "covers")
 MAX_AVATAR_BYTES = 400 * 1024
+MAX_COVER_BYTES = 900 * 1024
 STATIC_MIME = {
     ".png": "image/png",
     ".ico": "image/x-icon",
@@ -150,61 +152,86 @@ def api_profile(c):
         raise ApiError("头像地址不合法")
     db.run("UPDATE users SET display_name = ?, avatar = ? WHERE id = ?", (display, avatar, user["id"]))
     if avatar == "":
-        _drop_avatar_file(str(user["avatar"] or ""))
+        _drop_upload_file(str(user["avatar"] or ""), AVATAR_DIR)
     fresh = db.qone("SELECT * FROM users WHERE id = ?", (user["id"],))
     return ok(user=_full_user(c, fresh))
 
 
-def _drop_avatar_file(stored):
-    """删掉被替换下来的头像文件，别把磁盘堆满。"""
-    if not stored.startswith("av:"):
-        return
-    name = stored[3:]
-    if name == "" or "/" in name or ".." in name:
-        return
-    try:
-        os.remove(os.path.join(AVATAR_DIR, name))
-    except OSError:
-        pass
+def _drop_upload_file(stored, folder=AVATAR_DIR):
+    """删掉被替换下来的图片，别把磁盘堆满。"""
+    for prefix in ("av:", "cv:"):
+        if stored.startswith(prefix):
+            name = stored[len(prefix):]
+            if name == "" or "/" in name or ".." in name:
+                return
+            try:
+                os.remove(os.path.join(folder, name))
+            except OSError:
+                pass
+            return
 
 
-@route("POST", "/api/avatar")
-def api_avatar(c):
-    """接收前端裁好的方图（尽量 webp），落盘后把头像指过去。
-
-    浏览器不给 webp 编码时允许退化成 png，保证老 Safari 也能换头像。
-    """
-    user = c.need_login()
-    raw = str(c.arg("data") or "")
-    hit = re.match(r"^data:image/(webp|png);base64,(.+)$", raw, re.S)
+def _save_upload(raw, user_id, kind):
+    """解析 data URL → 校验 → 落盘 → 返回 "av:<文件名>" / "cv:<文件名>""。"""
+    hit = re.match(r"^data:image/(webp|png);base64,(.+)$", str(raw or ""), re.S)
     if not hit:
         raise ApiError("只接受 webp / png 图片")
-    kind, blob = hit.group(1), hit.group(2)
+    fmt, blob = hit.group(1), hit.group(2)
     try:
         data = base64.b64decode(blob, validate=True)
     except Exception:
         raise ApiError("图片数据损坏")
+
+    is_avatar = kind == "avatar"
+    limit = MAX_AVATAR_BYTES if is_avatar else MAX_COVER_BYTES
     if len(data) < 64:
         raise ApiError("图片太小")
-    if len(data) > MAX_AVATAR_BYTES:
-        raise ApiError("图片太大（上限 400KB）")
-    if kind == "webp" and (data[:4] != b"RIFF" or data[8:12] != b"WEBP"):
+    if len(data) > limit:
+        raise ApiError("图片太大（上限 %dKB）" % (limit // 1024))
+    if fmt == "webp" and (data[:4] != b"RIFF" or data[8:12] != b"WEBP"):
         raise ApiError("不是有效的 webp")
-    if kind == "png" and data[:8] != b"\x89PNG\r\n\x1a\n":
+    if fmt == "png" and data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ApiError("不是有效的 png")
 
-    os.makedirs(AVATAR_DIR, exist_ok=True)
-    name = "u%d-%s.%s" % (user["id"], secrets.token_hex(5), kind)
-    with open(os.path.join(AVATAR_DIR, name), "wb") as fh:
+    folder = AVATAR_DIR if is_avatar else COVER_DIR
+    os.makedirs(folder, exist_ok=True)
+    name = "%s%d-%s.%s" % ("u" if is_avatar else "b", int(user_id), secrets.token_hex(5), fmt)
+    with open(os.path.join(folder, name), "wb") as fh:
         fh.write(data)
+    return ("av:" if is_avatar else "cv:") + name
 
+
+@route("POST", "/api/avatar")
+def api_avatar(c):
+    """接收前端裁好的方图（尽量 webp），落盘后把头像指过去。"""
+    user = c.need_login()
+    stored = _save_upload(c.arg("data"), user["id"], "avatar")
     old = str(user["avatar"] or "")
-    db.run("UPDATE users SET avatar = ? WHERE id = ?", ("av:" + name, user["id"]))
-    if old != "av:" + name:
-        _drop_avatar_file(old)
-
+    db.run("UPDATE users SET avatar = ? WHERE id = ?", (stored, user["id"]))
+    if old != stored:
+        _drop_upload_file(old, AVATAR_DIR)
     fresh = db.qone("SELECT * FROM users WHERE id = ?", (user["id"],))
-    return ok(user=_full_user(c, fresh), url="av:" + name)
+    return ok(user=_full_user(c, fresh), url=stored)
+
+
+@route("POST", "/api/cover")
+def api_cover(c):
+    """资料卡封面：比头像宽，默认 3:2 左右。"""
+    user = c.need_login()
+    data = c.arg("data")
+    if not data:
+        # 传空 = 恢复默认渐变
+        old = str(user["cover"] or "")
+        db.run("UPDATE users SET cover = '' WHERE id = ?", (user["id"],))
+        _drop_upload_file(old, COVER_DIR)
+    else:
+        stored = _save_upload(data, user["id"], "cover")
+        old = str(user["cover"] or "")
+        db.run("UPDATE users SET cover = ? WHERE id = ?", (stored, user["id"]))
+        if old != stored:
+            _drop_upload_file(old, COVER_DIR)
+    fresh = db.qone("SELECT * FROM users WHERE id = ?", (user["id"],))
+    return ok(user=_full_user(c, fresh))
 
 
 @route("POST", "/api/password")
@@ -587,9 +614,26 @@ def api_search(c):
 
 @route("GET", "/api/subs")
 def api_subs(c):
+    """WSS 账号：用户名跟主账号共用，只对外暴露显示名。"""
     user = c.need_login()
-    rows = db.qall("SELECT * FROM users WHERE parent_id = ? ORDER BY id", (user["id"],))
-    return ok(subs=[store.user_brief(r) for r in rows])
+    rows = db.qall(
+        "SELECT * FROM users WHERE parent_id = ? AND is_sub = 1 ORDER BY id",
+        (user["id"],),
+    )
+    subs = [
+        {
+            "id": int(r["id"]),
+            "display_name": r["display_name"] or "WSS 账号",
+            "username": user["username"],           # 共用主账号用户名
+            "created_at": int(r["created_at"] or 0),
+        }
+        for r in rows
+    ]
+    return ok(
+        subs=subs,
+        can_create=(not store.is_sub(user)) and len(subs) == 0,
+        login_user=user["username"],
+    )
 
 
 @route("POST", "/api/subs")
@@ -597,22 +641,55 @@ def api_create_sub(c):
     user = c.need_login()
     if store.is_sub(user):
         raise ApiError("子账号不能再建子账号")
-    username = str(c.arg("username")).strip()
-    password = str(c.arg("password"))
-    display = str(c.arg("display_name") or username).strip()[:30]
-    if not re.match(r"^[A-Za-z0-9_-]{2,20}$", username):
-        raise ApiError("子账号名 2-20 位，只能用字母、数字、下划线、短横线")
+    if db.qone("SELECT 1 FROM users WHERE parent_id = ? AND is_sub = 1", (user["id"],)):
+        raise ApiError("已经有 WSS 账号了，在设置里改密码就行")
+    password = str(c.arg("password") or "")
+    display = str(c.arg("display_name") or "WSS 账号").strip()[:30]
     if len(password) < 6:
-        raise ApiError("子账号密码至少 6 位")
-    if db.qone("SELECT 1 FROM users WHERE username = ?", (username,)) is not None:
-        raise ApiError("这个用户名已被占用")
-    uid = auth.create_user(username, password, role="user", is_sub=1,
+        raise ApiError("密码至少 6 位")
+
+    # 用户名不对外暴露也不参与登录：登录用「主账号用户名 + 这个密码」
+    hidden = "~sub:%d-%s" % (user["id"], secrets.token_hex(3))
+    uid = auth.create_user(hidden, password, role="user", is_sub=1,
                            parent_id=user["id"], display_name=display)
-    # 子账号和主账号之间建一个私聊
     cid = store.get_or_create_dm(user["id"], uid)
     HUB.push_user(user["id"], {"type": "conversation", "conv_id": cid})
-    row = db.qone("SELECT * FROM users WHERE id = ?", (uid,))
-    return ok(sub=store.user_brief(row), conv_id=cid)
+    return ok(
+        sub={"id": uid, "display_name": display, "username": user["username"]},
+        conv_id=cid,
+    )
+
+
+@route("POST", "/api/subs/<sid>")
+def api_update_sub(c):
+    user = c.need_login()
+    sid = int(c.params["sid"])
+    row = db.qone(
+        "SELECT * FROM users WHERE id = ? AND parent_id = ? AND is_sub = 1",
+        (sid, user["id"]),
+    )
+    if row is None:
+        raise ApiError("子账号不存在", 404)
+
+    if c.arg("display_name") is not None:
+        name = str(c.arg("display_name") or "").strip()[:30]
+        if not name:
+            raise ApiError("显示名不能为空")
+        db.run("UPDATE users SET display_name = ? WHERE id = ?", (name, sid))
+
+    pw = str(c.arg("password") or "")
+    if pw:
+        if len(pw) < 6:
+            raise ApiError("密码至少 6 位")
+        db.run("UPDATE users SET password_hash = ? WHERE id = ?", (auth.hash_password(pw), sid))
+        db.run("DELETE FROM sessions WHERE user_id = ?", (sid,))
+
+    fresh = db.qone("SELECT * FROM users WHERE id = ?", (sid,))
+    return ok(sub={
+        "id": sid,
+        "display_name": fresh["display_name"] or "WSS 账号",
+        "username": user["username"],
+    })
 
 
 @route("DELETE", "/api/subs/<sid>")
@@ -900,11 +977,11 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
-    def _avatar(self, name):
+    def _avatar(self, name, folder=None):
         if "/" in name or ".." in name or name == "":
             self._send_headers(404, "text/plain; charset=utf-8", 0)
             return
-        full = os.path.join(AVATAR_DIR, name)
+        full = os.path.join(folder or AVATAR_DIR, name)
         if not os.path.isfile(full):
             self._send_headers(404, "text/plain; charset=utf-8", 0)
             return
@@ -992,6 +1069,11 @@ class Handler(BaseHTTPRequestHandler):
             # 用户头像（运行时写入数据目录）
             if path.startswith("/avatar/"):
                 self._avatar(path[len("/avatar/"):])
+                return
+
+            # 资料卡封面
+            if path.startswith("/cover/"):
+                self._avatar(path[len("/cover/"):], folder=COVER_DIR)
                 return
 
             # API

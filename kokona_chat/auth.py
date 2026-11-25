@@ -81,18 +81,48 @@ def create_user(username, password, email=None, role="user", is_sub=0, parent_id
 
 
 def authenticate(username, password):
-    """返回 (user_row, error)。error 是给用户看的中文说明。"""
+    """返回 (user_row, error)。error 是给用户看的中文说明。
+
+    WSS 子账号不再有自己的用户名：用「主账号用户名 + 子账号密码」登录。
+    所以主账号密码不对时，再拿同一串密码去比对该账号名下的子账号。
+    """
     row = find_by_username(username)
-    if row is None:
-        # 也允许用邮箱登录
-        row = find_by_email(username)
+    if row is not None:
+        if row["status"] == "banned":
+            return None, "这个账号已被封禁"
+        if verify_password(password, row["password_hash"]):
+            return row, ""
+        # 子账号走同一个用户名
+        sub = _match_sub(row["id"], password)
+        if sub is not None:
+            return sub, ""
+        return None, "账号或密码不正确"
+
+    # 也允许用邮箱登录
+    row = find_by_email(username)
     if row is None:
         return None, "账号或密码不正确"
     if row["status"] == "banned":
         return None, "这个账号已被封禁"
     if not verify_password(password, row["password_hash"]):
+        sub = _match_sub(row["id"], password)
+        if sub is not None:
+            return sub, ""
         return None, "账号或密码不正确"
     return row, ""
+
+
+def _match_sub(owner_id, password):
+    """在主账号名下的子账号里找一个密码匹配的。"""
+    if not password or owner_id is None:
+        return None
+    for row in db.qall(
+        "SELECT * FROM users WHERE parent_id = ? AND is_sub = 1 ORDER BY id",
+        (int(owner_id),),
+    ):
+        if row["status"] != "banned" and verify_password(password, row["password_hash"]):
+            return row
+    return None
 
 
 # ---------------- 邮箱验证码 ----------------

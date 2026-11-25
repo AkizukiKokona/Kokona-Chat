@@ -11,9 +11,10 @@ def j(obj):
 
 BASE_CSS = """
 :root{
-  --bg:#f2f2f2;--panel:#fff;--line:#e8e8e8;--text:#191919;--sub:#8a8a8a;
-  --brand:#07c160;--brand-d:#06a851;--danger:#fa5151;--soft:#f7f7f7;
-  --bubble-me:#95ec69;--bubble-other:#fff;--radius:10px;
+  --bg:#f7f3ea;--panel:#fff;--line:#eadfcc;--text:#2e2517;--sub:#8b7a61;
+  --brand:#9a6c3c;--brand-d:#83582c;--danger:#c1503c;--soft:#fbf7ef;
+  --bubble-me:#f4e3c4;--bubble-other:#fff;--radius:10px;
+  --cover-grad:linear-gradient(150deg,#cda36c 0%,#b08050 55%,#93653a 100%);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;height:100%}
@@ -29,11 +30,11 @@ a{color:var(--brand-d);text-decoration:none}
 
 /* ---------- 登录/注册 ---------- */
 .auth-wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px 16px;
-  background:linear-gradient(160deg,#eafaf0 0%,#f2f2f2 40%,#f2f2f2 100%)}
+  background:linear-gradient(160deg,#f7efe0 0%,#f7f3ea 40%,#f7f3ea 100%)}
 .auth-card{width:100%;max-width:400px;background:var(--panel);border-radius:18px;padding:28px 22px 24px;
   box-shadow:0 8px 40px rgba(0,0,0,.06)}
 .auth-logo{width:72px;height:72px;border-radius:20px;object-fit:cover;display:block;
-  margin:0 auto 14px;box-shadow:0 6px 20px rgba(7,193,96,.18)}
+  margin:0 auto 14px;box-shadow:0 6px 20px rgba(154,108,60,.18)}
 .remember{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--sub);margin:0 0 12px;cursor:pointer}
 .remember input{width:16px;height:16px;accent-color:var(--brand);margin:0}
 .auth-title{text-align:center;font-size:20px;font-weight:600;margin:0 0 4px}
@@ -64,19 +65,19 @@ a{color:var(--brand-d);text-decoration:none}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
 .side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
 .me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
-.me-btn:active{background:#f0f0f0}
-.me-av{width:38px;height:38px;border-radius:10px;object-fit:cover;background:#e4ece6;flex:0 0 auto;border:1px solid rgba(0,0,0,.05)}
+.me-btn:active{background:#f2ead9}
+.me-av{width:38px;height:38px;border-radius:10px;object-fit:cover;background:#efe4d0;flex:0 0 auto;border:1px solid rgba(0,0,0,.05)}
 .me-name{font-weight:600;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .side-search{padding:4px 12px 8px}
 .side-search input{width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--soft);outline:none;font-size:14px}
 .conv-list{flex:1;overflow-y:auto;overscroll-behavior:contain}
 .conv{display:flex;gap:10px;padding:11px 14px;align-items:center;position:relative}
 .conv:active{background:#ececec}
-.conv.on{background:#e6f7ec}
-.avatar{width:44px;height:44px;border-radius:8px;background:#c9c9c9;color:#fff;display:flex;
+.conv.on{background:#f4e8d4}
+.avatar{width:44px;height:44px;border-radius:8px;background:#d9c6a8;color:#fff;display:flex;
   align-items:center;justify-content:center;font-weight:600;font-size:16px;flex:0 0 auto;overflow:hidden}
 .avatar img{width:100%;height:100%;object-fit:cover}
-.avatar.g{background:#f0a020}
+.avatar.g{background:#b08050}
 .avatar.sm{width:34px;height:34px;font-size:13px;border-radius:7px}
 .conv-body{flex:1;min-width:0}
 .conv-top{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
@@ -126,14 +127,14 @@ a{color:var(--brand-d);text-decoration:none}
 .card{background:var(--panel);border-radius:12px;padding:4px 0;margin-bottom:14px;overflow:hidden}
 .item{display:flex;align-items:center;gap:10px;padding:13px 14px;border-bottom:1px solid var(--line)}
 .item:last-child{border-bottom:0}
-.item:active{background:#f5f5f5}
+.item:active{background:#f5efe3}
 .item .txt{flex:1;min-width:0}
 .item .t1{font-size:15px}
 .item .t2{font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .arrow{color:#c8c8c8;font-size:18px}
-.pill{font-size:11px;padding:2px 7px;border-radius:6px;background:#eef7f1;color:var(--brand-d)}
-.pill.warn{background:#fff1f0;color:var(--danger)}
-.pill.gray{background:#f0f0f0;color:var(--sub)}
+.pill{font-size:11px;padding:2px 7px;border-radius:6px;background:#f6ecdb;color:var(--brand-d)}
+.pill.warn{background:#fbeee8;color:var(--danger)}
+.pill.gray{background:#f2ead9;color:var(--sub)}
 .empty{text-align:center;color:var(--sub);font-size:13px;padding:40px 10px}
 .mini-form{display:flex;flex-direction:column;gap:8px;padding:14px}
 .mini-form input{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--soft);outline:none}
@@ -147,16 +148,25 @@ a{color:var(--brand-d);text-decoration:none}
   transform:translateX(-102%);transition:transform .26s cubic-bezier(.32,.72,.28,1);
   box-shadow:2px 0 26px rgba(0,0,0,.14)}
 .drawer-mask.show .drawer{transform:translateX(0)}
-.profile-card{display:block;width:100%;text-align:left;padding:calc(26px + env(safe-area-inset-top)) 20px 22px;
-  background:linear-gradient(150deg,#0ac768 0%,#07b45c 55%,#059a4a 100%);color:#fff}
-.profile-card:active{filter:brightness(.96)}
+.profile-card{position:relative;display:block;width:100%;text-align:left;
+  padding:calc(26px + env(safe-area-inset-top)) 20px 22px;
+  background:var(--cover-grad);color:#fff;overflow:hidden}
+.profile-card:active{filter:brightness(.97)}
+.cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cover-scrim{position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(30,18,6,.10) 0%,rgba(30,18,6,.52) 100%)}
+.profile-card > *:not(.cover-img):not(.cover-scrim){position:relative;z-index:2}
+.cover-edit{position:absolute;right:12px;top:calc(10px + env(safe-area-inset-top));z-index:3;
+  padding:5px 10px;border-radius:999px;background:rgba(0,0,0,.32);color:#fff;font-size:11px;
+  backdrop-filter:blur(4px)}
+.cover-edit:active{background:rgba(0,0,0,.45)}
 .profile-av{width:66px;height:66px;border-radius:18px;object-fit:cover;
   border:2px solid rgba(255,255,255,.85);box-shadow:0 4px 14px rgba(0,0,0,.16);background:#fff}
 .profile-name{font-size:19px;font-weight:700;margin-top:12px}
 .profile-id{font-size:12px;opacity:.88;margin-top:3px}
 .drawer-nav{flex:1;overflow-y:auto;padding:8px 0}
 .drawer-nav button{display:flex;align-items:center;width:100%;padding:14px 20px;font-size:15px;text-align:left;gap:12px}
-.drawer-nav button:active{background:#f5f5f5}
+.drawer-nav button:active{background:#f5efe3}
 .drawer-nav .di{width:22px;text-align:center;font-size:17px}
 .drawer-nav .danger{color:var(--danger)}
 .drawer-foot{padding:14px 20px;font-size:12px;color:var(--sub);padding-bottom:calc(14px + env(safe-area-inset-bottom))}
@@ -182,25 +192,49 @@ a{color:var(--brand-d);text-decoration:none}
 .ann-bubble .btn{padding:8px;font-size:14px;border-radius:9px}
 
 /* ---------- 设置页 ---------- */
-.set-hero{display:flex;align-items:center;gap:14px;padding:18px 16px;background:var(--panel);
-  border-radius:14px;margin-bottom:14px}
-.set-av{width:64px;height:64px;border-radius:50%;object-fit:cover;flex:0 0 auto;background:#e4ece6;
-  border:1px solid rgba(0,0,0,.06)}
-.set-hero-txt{flex:1;min-width:0}
-.set-name{font-size:18px;font-weight:700;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.set-user{font-size:12px;color:var(--sub);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ghost-btn{flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1px solid var(--line);
-  background:var(--soft);font-size:13px;color:var(--brand-d);font-weight:500}
-.ghost-btn:active{background:#eef7f1}
+.set-hero{position:relative;overflow:hidden;border-radius:14px;margin-bottom:14px;min-height:140px;
+  background:var(--cover-grad);color:#fff;padding:18px 16px 16px;display:flex;align-items:flex-end;gap:13px}
+.set-hero > *:not(.cover-img):not(.cover-scrim){position:relative;z-index:2}
+.set-av{width:62px;height:62px;border-radius:50%;object-fit:cover;flex:0 0 auto;
+  border:2px solid rgba(255,255,255,.9);background:#efe4d0;box-shadow:0 3px 12px rgba(0,0,0,.16)}
+.set-hero-txt{flex:1;min-width:0;padding-bottom:2px}
+.set-name{font-size:19px;font-weight:700;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-user{font-size:12px;opacity:.9;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-tools{position:absolute;right:10px;top:10px;z-index:3;display:flex;gap:6px}
+.set-tools button{padding:5px 10px;border-radius:999px;background:rgba(0,0,0,.3);color:#fff;font-size:11px}
+.set-tools button:active{background:rgba(0,0,0,.45)}
 .set-group{background:var(--panel);border-radius:12px;overflow:hidden;margin-bottom:14px}
 .set-group .item{border-bottom:1px solid var(--line)}
 .set-group .item:last-child{border-bottom:0}
-.set-note{padding:0 4px 8px;font-size:12px;color:var(--sub)}
+.set-group-head{padding:12px 16px 8px;font-size:12px;font-weight:600;color:var(--sub)}
+.set-note{padding:0 4px 10px;font-size:12px;color:var(--sub);line-height:1.6}
+.set-note code{background:#f6ecdb;color:var(--brand-d);padding:1px 5px;border-radius:4px;font-size:11px}
+.mini-pw{display:flex;gap:8px;padding:10px 14px 12px;align-items:center}
+.mini-pw input{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:9px;
+  background:var(--soft);outline:none;font-size:14px}
+.mini-pw .btn{width:auto;padding:0 14px;height:38px;font-size:14px}
+
+/* ---------- 资料卡 ---------- */
+.ucard{position:relative}
+.ucard-hero{position:relative;height:158px;background:var(--cover-grad);overflow:hidden}
+.ucard-av{position:absolute;left:18px;bottom:-32px;width:78px;height:78px;border-radius:50%;
+  border:3px solid #fff;object-fit:cover;background:#efe4d0;z-index:2;box-shadow:0 4px 14px rgba(0,0,0,.14)}
+.ucard-close{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:50%;
+  background:rgba(0,0,0,.32);color:#fff;display:flex;align-items:center;justify-content:center;z-index:3;font-size:15px}
+.ucard-body{padding:40px 18px 10px}
+.ucard-name{font-size:19px;font-weight:700;line-height:1.25;word-break:break-word}
+.ucard-user{font-size:12px;color:var(--sub);margin-top:4px}
+.ucard-acts{margin-top:14px}
+.ucard-acts .item{border-bottom:1px solid var(--line)}
+.ucard-acts .item:last-child{border-bottom:0}
+#ucard-sheet .sheet-body{padding:0}
+#ucard-sheet .sheet-head{display:none}
 
 /* ---------- 头像裁剪 ---------- */
 .crop-box{position:relative;width:100%;max-width:300px;aspect-ratio:1/1;margin:16px auto 10px;
   border-radius:14px;overflow:hidden;background:#111;touch-action:none;cursor:grab}
 .crop-box:active{cursor:grabbing}
+.crop-box.wide{max-width:340px;aspect-ratio:3/2}
 .crop-box img{position:absolute;left:50%;top:50%;transform-origin:center;will-change:transform;
   -webkit-user-drag:none;user-select:none;pointer-events:none}
 .crop-mask{position:absolute;inset:0;border-radius:14px;pointer-events:none;
@@ -235,7 +269,7 @@ def _doc(title, body, extra_css="", extra_js="", base=None):
 <html lang="zh-CN"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#07c160">
+<meta name="theme-color" content="#9a6c3c">
 <link rel="icon" type="image/png" href="%s">
 <link rel="apple-touch-icon" href="%s">
 <title>%s</title>
@@ -525,7 +559,7 @@ def recover_page(base=None):
   <div class="auth-foot"><a href="__BASE__/login">返回登录</a><a href="__BASE__/register">注册新账号</a></div>
 </div></div>
 """.replace("__BASE__", config.BASE or "" if base is None else base)
-    return _doc("找回账号 · 心夏 Chat", body, extra_css=".code-btn.on{background:#e6f7ec;border-color:#9ad9b4;color:#06a851}", extra_js=RECOVER_JS, base=base)
+    return _doc("找回账号 · 心夏 Chat", body, extra_css=".code-btn.on{background:#f4e8d4;border-color:#9ad9b4;color:#83582c}", extra_js=RECOVER_JS, base=base)
 
 
 # ================================================================ 主界面
@@ -561,13 +595,16 @@ APP_BODY = """<div class="app" id="app">
 
 <div class="drawer-mask hidden" id="drawer">
   <aside class="drawer">
-    <button class="profile-card" data-act="drawer-profile">
+    <div class="profile-card" data-act="drawer-profile">
+      <img class="cover-img hidden" id="drawer-cover" alt="">
+      <div class="cover-scrim"></div>
+      <button class="cover-edit" data-act="pick-cover">换封面</button>
       <img class="profile-av" id="drawer-av" src="__BASE__/static/icon.png" alt="">
       <div class="profile-name" id="drawer-name"></div>
       <div class="profile-id" id="drawer-id"></div>
-    </button>
+    </div>
     <nav class="drawer-nav" id="drawer-nav"></nav>
-    <div class="drawer-foot">心夏 Chat · 轻量版</div>
+    <div class="drawer-foot">Kokona Chat · 轻量版</div>
   </aside>
 </div>
 <div class="toast" id="toast"></div>
@@ -584,7 +621,7 @@ const ICON = BASE + '/static/icon.png';
 
 const S = {
   me: ME, convs: [], cur: null, msgs: [],
-  friends: [], blocks: [], subs: [], anns: [], view: 'chats'
+  friends: [], blocks: [], subs: [], subCanCreate: false, anns: [], view: 'chats'
 };
 
 /* ---------------- 通用 ---------------- */
@@ -639,6 +676,22 @@ function avatarSrc(u) {
   return '';
 }
 
+/** 资料卡封面：cv:文件名 → /cover/xxx；没有就返回空串（走默认渐变）。 */
+function coverSrc(u) {
+  const c = String((u && u.cover) || '');
+  if (c.indexOf('cv:') === 0) return BASE + '/cover/' + encodeURIComponent(c.slice(3));
+  if (/^https?:\/\//.test(c)) return c;
+  return '';
+}
+
+function coverImg(u, cls, id) {
+  const src = coverSrc(u);
+  const attrs = ' class="cover-img ' + (cls || '') + (src ? '' : ' hidden') + '"'
+    + (id ? ' id="' + id + '"' : '')
+    + (src ? ' src="' + esc(src) + '"' : '');
+  return '<img' + attrs + ' alt="">';
+}
+
 /** 自己没设头像时用站点头像，别人没设就用名字首字。 */
 function avatar(u, cls) {
   cls = cls || '';
@@ -661,6 +714,11 @@ function renderDrawer() {
   $('#drawer-av').src = avatarSrc(me) || ICON;
   $('#drawer-name').textContent = displayName(me);
   $('#drawer-id').textContent = '@' + me.username + (me.is_admin ? ' · 管理员' : '');
+  const cv = coverSrc(me), el = $('#drawer-cover');
+  if (el) {
+    if (cv) { el.src = cv; el.classList.remove('hidden'); }
+    else { el.removeAttribute('src'); el.classList.add('hidden'); }
+  }
 
   const items = [
     ['open-settings', '⚙️', '设置'],
@@ -908,7 +966,7 @@ async function loadFriends() {
 function showContacts() {
   S.view = 'contacts';
   const friendRows = S.friends.length
-    ? S.friends.map((f) => '<div class="item" data-act="open-dm" data-id="' + f.id + '">'
+    ? S.friends.map((f) => '<div class="item" data-act="user-card" data-id="' + f.id + '">'
         + avatar(f, 'sm') + '<div class="txt"><div class="t1">' + esc(displayName(f))
         + '</div><div class="t2">@' + esc(f.username) + '</div></div>'
         + '<span class="arrow">›</span></div>').join('')
@@ -922,22 +980,11 @@ function showContacts() {
         + (g.member_count || 0) + ' 人</div></div><span class="arrow">›</span></div>').join('')
     : '<div class="empty">还没有群聊</div>';
 
-  const subRows = S.subs.length
-    ? S.subs.map((s) => '<div class="item"><div class="txt"><div class="t1">' + esc(displayName(s))
-        + '</div><div class="t2">@' + esc(s.username) + ' · 子账号</div></div>'
-        + '<button class="code-btn" data-act="del-sub" data-id="' + s.id + '">删除</button></div>').join('')
-    : '<div class="empty" style="padding:16px">还没有子账号</div>';
-
-  const isSub = S.me.is_sub === 1;
   showPanel('通讯录',
     '<div class="side-search" style="padding:0 0 12px"><input id="uq" placeholder="搜索用户名加好友"></div>'
     + '<div id="user-results"></div>'
     + '<h2>好友（' + S.friends.length + '）</h2><div class="card">' + friendRows + '</div>'
     + '<h2>群聊（' + groups.length + '）</h2><div class="card">' + groupRows + '</div>'
-    + (isSub ? '' : '<h2>我的子账号</h2><div class="card">' + subRows
-        + '<div class="mini-form"><input id="sub-name" placeholder="子账号名（英文/数字）">'
-        + '<input id="sub-pass" type="password" placeholder="子账号密码（≥6 位）">'
-        + '<button class="btn" data-act="new-sub">创建子账号</button></div></div>')
   );
 
   const uq = $('#uq');
@@ -949,11 +996,12 @@ function showContacts() {
 }
 
 async function loadSubs() {
-  if (S.me.is_sub === 1) return;
+  if (Number(S.me.is_sub) === 1) { S.subs = []; S.subCanCreate = false; return; }
   try {
     const d = await api('/api/subs');
     S.subs = d.subs || [];
-  } catch (e) { /* 忽略 */ }
+    S.subCanCreate = d.can_create === true;
+  } catch (e) { S.subs = []; S.subCanCreate = false; }
 }
 
 async function doSearch() {
@@ -1007,11 +1055,14 @@ function openAnnList() {
 
 /* ---------------- 弹层 ---------------- */
 
-function openSheet(title, bodyHtml, footHtml) {
+function openSheet(title, bodyHtml, footHtml, sheetId) {
   const mask = document.createElement('div');
   mask.className = 'mask';
-  mask.innerHTML = '<div class="sheet"><div class="sheet-head"><b>' + esc(title) + '</b>'
-    + '<button class="icon-btn" data-close="1">✕</button></div>'
+  if (sheetId) mask.id = sheetId;
+  const head = title === null ? ''
+    : '<div class="sheet-head"><b>' + esc(title) + '</b>'
+      + '<button class="icon-btn" data-close="1">✕</button></div>';
+  mask.innerHTML = '<div class="sheet">' + head
     + '<div class="sheet-body">' + bodyHtml + '</div>'
     + (footHtml ? '<div class="sheet-foot">' + footHtml + '</div>' : '') + '</div>';
   document.body.appendChild(mask);
@@ -1039,9 +1090,9 @@ function chatSetting() {
       + '<div class="item" data-act="' + (blocked ? 'unblock' : 'block') + '" data-id="' + peer.id + '">'
       + '<div class="txt"><div class="t1">' + (blocked ? '解除黑名单' : '加入黑名单') + '</div></div></div>'
       + '<div class="item" data-act="unfriend" data-id="' + peer.id + '">'
-      + '<div class="txt"><div class="t1" style="color:#fa5151">删除好友</div>'
+      + '<div class="txt"><div class="t1" style="color:#c1503c">删除好友</div>'
       + '<div class="t2">对方不会收到通知</div></div></div>'
-      + '<div class="item" data-act="del-conv"><div class="txt"><div class="t1" style="color:#fa5151">'
+      + '<div class="item" data-act="del-conv"><div class="txt"><div class="t1" style="color:#c1503c">'
       + '删除这个聊天</div></div></div>'
       + '</div>', '');
   } else {
@@ -1050,12 +1101,12 @@ function chatSetting() {
       + '<input id="gname-in" value="' + esc(conv.title) + '">'
       + '<button class="btn" data-act="save-gname">保存群名</button></div>'
       + '<div class="card" style="margin:0 14px 14px">'
-      + (conv.members || []).map((m) => '<div class="item">' + avatar(m, 'sm')
+      + (conv.members || []).map((m) => '<div class="item" data-act="user-card" data-id="' + m.id + '">' + avatar(m, 'sm')
           + '<div class="txt"><div class="t1">' + esc(displayName(m)) + '</div><div class="t2">@'
           + esc(m.username) + '</div></div></div>').join('')
       + '</div>'
       + '<div class="card" style="margin:0 14px 14px">'
-      + '<div class="item" data-act="del-conv"><div class="txt"><div class="t1" style="color:#fa5151">'
+      + '<div class="item" data-act="del-conv"><div class="txt"><div class="t1" style="color:#c1503c">'
       + '解散 / 退出群聊</div></div></div></div>', '');
   }
 }
@@ -1063,40 +1114,89 @@ function chatSetting() {
 /* ---------------- 表单类弹层 ---------------- */
 
 /** 个人资料 / 账号设置：所有登录用户都有这一页。 */
-function openSettings() {
+async function openSettings() {
   S.view = 'settings';
+  await loadSubs();
+  renderSettings();
+}
+
+function wssEndpoint() {
+  return 'wss://' + location.host + BASE + '/ws';
+}
+
+function renderSettings() {
   const me = S.me;
   const isSub = Number(me.is_sub) === 1;
-  const tag = me.is_admin ? ' · 管理员' : (isSub ? ' · 子账号' : '');
-  showPanel('设置',
+  const tag = me.is_admin ? ' \u00b7 \u7ba1\u7406\u5458' : (isSub ? ' \u00b7 \u5b50\u8d26\u53f7' : '');
+  const url = wssEndpoint();
+
+  let wss = '';
+  if (isSub) {
+    wss = '<div class="set-note">\u5b50\u8d26\u53f7\u4e0d\u80fd\u518d\u521b\u5efa WSS \u8d26\u53f7\u3002</div>';
+  } else if (S.subs.length) {
+    const s = S.subs[0];
+    wss = '<div class="item"><div class="txt"><div class="t1">\u663e\u793a\u540d</div>'
+      + '<div class="t2">' + esc(s.display_name) + '</div></div></div>'
+      + '<div class="mini-pw"><input id="sub-dn" maxlength="30" value="' + esc(s.display_name) + '">'
+      + '<button class="btn" data-act="save-sub-dn" data-id="' + s.id + '">\u6539\u540d</button></div>'
+      + '<div class="mini-pw"><input id="sub-pw" type="password" placeholder="\u65b0\u5bc6\u7801\uff08\u22656 \u4f4d\uff0c\u7559\u7a7a\u4e0d\u6539\uff09">'
+      + '<button class="btn" data-act="save-sub-pw" data-id="' + s.id + '">\u91cd\u8bbe</button></div>'
+      + '<div class="item" data-act="del-sub" data-id="' + s.id + '"><div class="txt">'
+      + '<div class="t1" style="color:var(--danger)">\u5220\u9664 WSS \u8d26\u53f7</div>'
+      + '<div class="t2">\u548c\u5b83\u7684\u804a\u5929\u8bb0\u5f55\u4f1a\u7559\u4e0b</div></div></div>'
+      + '<div class="set-note">\u7528\u6237\u540d\u8ddf\u4e3b\u8d26\u53f7\u5171\u7528\uff0c\u53ea\u9700\u8981\u5bc6\u7801\uff1a<br><code>'
+      + esc(url) + '?user=' + esc(me.username) + '&amp;pass=\u5bc6\u7801</code></div>';
+  } else if (S.subCanCreate) {
+    wss = '<div class="mini-pw"><input id="sub-dn-new" maxlength="30" placeholder="\u663e\u793a\u540d\uff08\u53ef\u7559\u7a7a\uff09"></div>'
+      + '<div class="mini-pw"><input id="sub-pw-new" type="password" placeholder="\u5bc6\u7801\uff08\u22656 \u4f4d\uff09">'
+      + '<button class="btn" data-act="new-sub">\u521b\u5efa</button></div>'
+      + '<div class="set-note">\u4e0d\u4f1a\u65b0\u6ce8\u518c\u4e00\u4e2a\u8d26\u53f7\uff1a\u7528\u6237\u540d\u4ecd\u662f\u4f60\u81ea\u5df1\u7684\uff0c\u53ea\u662f\u591a\u4e00\u4e2a\u5bc6\u7801\u3002\u8fde <code>'
+      + esc(url) + '</code> \u65f6\u7528 <code>user=' + esc(me.username) + '</code>\u3002</div>';
+  } else {
+    wss = '<div class="set-note">\u5f53\u524d\u8d26\u53f7\u4e0d\u80fd\u518d\u521b\u5efa WSS \u8d26\u53f7\u3002</div>';
+  }
+
+  showPanel('\u8bbe\u7f6e',
     '<div class="set-hero">'
+    + coverImg(me, '', 'set-cover')
+    + '<div class="cover-scrim"></div>'
+    + '<div class="set-tools"><button data-act="pick-avatar">\u6362\u5934\u50cf</button>'
+    + '<button data-act="pick-cover">\u6362\u5c01\u9762</button></div>'
     + '<img class="set-av" id="set-av" src="' + esc(avatarSrc(me) || ICON) + '" alt="">'
     + '<div class="set-hero-txt"><div class="set-name">' + esc(displayName(me)) + '</div>'
-    + '<div class="set-user">@' + esc(me.username) + esc(tag) + '</div></div>'
-    + '<button class="ghost-btn" data-act="pick-avatar">换头像</button></div>'
+    + '<div class="set-user">@' + esc(me.username) + esc(tag) + '</div></div></div>'
+
     + '<div class="set-group">'
-    + '<div class="item" data-act="edit-name"><div class="txt"><div class="t1">显示名</div>'
-    + '<div class="t2">' + esc(displayName(me)) + '</div></div><span class="arrow">›</span></div>'
-    + '<div class="item"><div class="txt"><div class="t1">账号</div><div class="t2">@'
+    + '<div class="item" data-act="edit-name"><div class="txt"><div class="t1">\u663e\u793a\u540d</div>'
+    + '<div class="t2">' + esc(displayName(me)) + '</div></div><span class="arrow">\u203a</span></div>'
+    + '<div class="item"><div class="txt"><div class="t1">\u8d26\u53f7</div><div class="t2">@'
     + esc(me.username) + '</div></div></div>'
-    + (me.email ? '<div class="item"><div class="txt"><div class="t1">邮箱</div><div class="t2">'
+    + (me.email ? '<div class="item"><div class="txt"><div class="t1">\u90ae\u7bb1</div><div class="t2">'
       + esc(me.email) + '</div></div></div>' : '')
     + '</div>'
+
+    + '<div class="set-group"><div class="set-group-head">WSS \u8d26\u53f7</div>' + wss + '</div>'
+
+    + '<div class="set-group"><div class="set-group-head">\u8d26\u53f7\u5b89\u5168</div>'
+    + '<div class="item" data-act="password"><div class="txt"><div class="t1">\u4fee\u6539\u5bc6\u7801</div></div>'
+    + '<span class="arrow">\u203a</span></div></div>'
+
     + '<div class="set-group">'
-    + '<div class="item" data-act="password"><div class="txt"><div class="t1">修改密码</div></div>'
-    + '<span class="arrow">›</span></div>'
-    + '<div class="item" data-act="drawer-ann"><div class="txt"><div class="t1">公告板</div></div>'
-    + '<span class="arrow">›</span></div>'
-    + (me.is_admin ? '<div class="item" data-act="drawer-admin"><div class="txt"><div class="t1">管理后台</div>'
-      + '</div><span class="arrow">›</span></div>' : '')
-    + '</div>'
-    + '<div class="set-group"><div class="item" data-act="logout"><div class="txt">'
-    + '<div class="t1" style="color:#fa5151">退出登录</div></div></div></div>'
-    + '<div class="set-note">头像会被裁成方形并转成 webp 存到服务器，最大 400KB。</div>'
-    + '<input type="file" id="av-file" accept="image/*" hidden>',
+    + '<div class="item" data-act="drawer-ann"><div class="txt"><div class="t1">\u516c\u544a\u677f</div></div>'
+    + '<span class="arrow">\u203a</span></div>'
+    + (me.is_admin ? '<div class="item" data-act="drawer-admin"><div class="txt"><div class="t1">\u7ba1\u7406\u540e\u53f0</div>'
+      + '</div><span class="arrow">\u203a</span></div>' : '')
+    + '<div class="item" data-act="logout"><div class="txt"><div class="t1" style="color:var(--danger)">\u9000\u51fa\u767b\u5f55</div>'
+    + '</div></div></div>'
+    + '<div class="set-note">\u5934\u50cf\u4e0e\u5c01\u9762\u90fd\u5728\u672c\u5730\u88c1\u597d\u3001\u8f6c\u6210 webp \u518d\u4e0a\u4f20\u3002</div>'
+    + '<input type="file" id="av-file" accept="image/*" hidden>'
+    + '<input type="file" id="cover-file" accept="image/*" hidden>',
     '');
-  const f = $('#av-file');
-  if (f) f.addEventListener('change', onAvatarPicked);
+
+  const av = $('#av-file');
+  if (av) av.addEventListener('change', onAvatarPicked);
+  const cv = $('#cover-file');
+  if (cv) cv.addEventListener('change', onCoverPicked);
 }
 
 /** 把服务端返回的最新用户信息同步到界面各处。 */
@@ -1110,6 +1210,12 @@ function applyMe(u) {
   if (n) n.textContent = displayName(S.me);
   const sa = $('#set-av');
   if (sa) sa.src = av;
+  const sc = $('#set-cover');
+  const cv = coverSrc(S.me);
+  if (sc) {
+    if (cv) { sc.src = cv; sc.classList.remove('hidden'); }
+    else { sc.removeAttribute('src'); sc.classList.add('hidden'); }
+  }
   renderDrawer();
 }
 
@@ -1131,26 +1237,31 @@ function changePassword() {
 
 /* ---------------- 头像：选图 → 拖动/缩放裁剪 → 转 webp 上传 ---------------- */
 
-const CROP = { img: null, zoom: 1, x: 0, y: 0, base: 1, w: 0, h: 0, box: 0 };
+const CROP = { img: null, mode: 'avatar', zoom: 1, x: 0, y: 0, base: 1, w: 0, h: 0, bw: 0, bh: 0 };
 
-function onAvatarPicked(e) {
-  const file = e.target.files && e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  if (!/^image\//.test(file.type)) { toast('请选择图片文件'); return; }
-  if (file.size > 8 * 1024 * 1024) { toast('图片太大（8MB 以内）'); return; }
-  const reader = new FileReader();
-  reader.onload = () => openCropper(String(reader.result || ''));
-  reader.onerror = () => toast('读取图片失败');
-  reader.readAsDataURL(file);
+function pickImage(handler) {
+  return (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { toast('\u8bf7\u9009\u62e9\u56fe\u7247\u6587\u4ef6'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast('\u56fe\u7247\u592a\u5927\uff0810MB \u4ee5\u5185\uff09'); return; }
+    const reader = new FileReader();
+    reader.onload = () => handler(String(reader.result || ''));
+    reader.onerror = () => toast('\u8bfb\u53d6\u56fe\u7247\u5931\u8d25');
+    reader.readAsDataURL(file);
+  };
 }
+
+const onAvatarPicked = pickImage((src) => openCropper(src, 'avatar'));
+const onCoverPicked = pickImage((src) => openCropper(src, 'cover'));
 
 function cropApply() {
   if (!CROP.img) return;
-  const B = CROP.box;
+  const W = CROP.bw, H = CROP.bh;
   const s = CROP.base * CROP.zoom;
   const dw = CROP.w * s, dh = CROP.h * s;
-  const maxX = Math.max(0, (dw - B) / 2), maxY = Math.max(0, (dh - B) / 2);
+  const maxX = Math.max(0, (dw - W) / 2), maxY = Math.max(0, (dh - H) / 2);
   CROP.x = Math.min(maxX, Math.max(-maxX, CROP.x));
   CROP.y = Math.min(maxY, Math.max(-maxY, CROP.y));
   CROP.img.style.width = dw + 'px';
@@ -1158,25 +1269,28 @@ function cropApply() {
   CROP.img.style.transform = 'translate(-50%,-50%) translate(' + CROP.x + 'px,' + CROP.y + 'px)';
 }
 
-function openCropper(src) {
-  openSheet('调整头像',
-    '<div class="crop-box" id="crop-box">'
+function openCropper(src, mode) {
+  const cover = mode === 'cover';
+  openSheet(cover ? '\u8c03\u6574\u5c01\u9762' : '\u8c03\u6574\u5934\u50cf',
+    '<div class="crop-box' + (cover ? ' wide' : '') + '" id="crop-box">'
     + '<img id="crop-img" alt="">'
-    + '<div class="crop-mask"></div><div class="crop-ring"></div></div>'
-    + '<div class="crop-ctrl"><span>缩放</span>'
+    + '<div class="crop-mask"></div>' + (cover ? '' : '<div class="crop-ring"></div>') + '</div>'
+    + '<div class="crop-ctrl"><span>\u7f29\u653e</span>'
     + '<input type="range" id="crop-zoom" min="1" max="3" step="0.01" value="1"></div>',
-    '<button class="btn" data-act="crop-save">保存头像</button>');
+    '<button class="btn" data-act="crop-save">\u4fdd\u5b58</button>');
 
   const box = $('#crop-box'), img = $('#crop-img'), range = $('#crop-zoom');
   if (!box || !img || !range) return;
 
-  CROP.img = img; CROP.zoom = 1; CROP.x = 0; CROP.y = 0;
+  CROP.img = img; CROP.mode = cover ? 'cover' : 'avatar';
+  CROP.zoom = 1; CROP.x = 0; CROP.y = 0;
 
   const start = () => {
     CROP.w = img.naturalWidth || 1;
     CROP.h = img.naturalHeight || 1;
-    CROP.box = box.clientWidth || 240;
-    CROP.base = Math.max(CROP.box / CROP.w, CROP.box / CROP.h);
+    CROP.bw = box.clientWidth || 240;
+    CROP.bh = box.clientHeight || 240;
+    CROP.base = Math.max(CROP.bw / CROP.w, CROP.bh / CROP.h);
     CROP.x = 0; CROP.y = 0;
     cropApply();
   };
@@ -1206,29 +1320,88 @@ function openCropper(src) {
 
 async function saveCrop() {
   const img = CROP.img;
-  if (!img || !CROP.box) { toast('图片还没准备好'); return; }
+  if (!img || !CROP.bw) { toast('\u56fe\u7247\u8fd8\u6ca1\u51c6\u5907\u597d'); return; }
   const s = CROP.base * CROP.zoom;
-  const side = CROP.box / s;                       // 裁剪框对应的原图边长
-  const sx = CROP.w / 2 - CROP.x / s - side / 2;
-  const sy = CROP.h / 2 - CROP.y / s - side / 2;
-  const out = 256;
+  const sw = CROP.bw / s, sh = CROP.bh / s;
+  const sx = CROP.w / 2 - CROP.x / s - sw / 2;
+  const sy = CROP.h / 2 - CROP.y / s - sh / 2;
+  const cover = CROP.mode === 'cover';
+  const outW = cover ? 720 : 256, outH = cover ? 480 : 256;
   const cv = document.createElement('canvas');
-  cv.width = out; cv.height = out;
+  cv.width = outW; cv.height = outH;
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, sx, sy, side, side, 0, 0, out, out);
-  let data = cv.toDataURL('image/webp', 0.88);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+  let data = cv.toDataURL('image/webp', 0.86);
   if (data.indexOf('data:image/webp') !== 0) data = cv.toDataURL('image/png');
   try {
-    const d = await api('/api/avatar', 'POST', { data: data });
+    const d = await api(cover ? '/api/cover' : '/api/avatar', 'POST', { data: data });
     applyMe(d.user);
     document.querySelectorAll('.mask').forEach((m) => m.remove());
-    toast('头像已更新');
+    toast(cover ? '\u5c01\u9762\u5df2\u66f4\u65b0' : '\u5934\u50cf\u5df2\u66f4\u65b0');
     if (S.view === 'settings') openSettings();
   } catch (err) {
-    toast('上传失败：' + (err.message || '未知错误'));
+    toast('\u4e0a\u4f20\u5931\u8d25\uff1a' + (err.message || '\u672a\u77e5\u9519\u8bef'));
   }
+}
+
+/* ---------------- \u8d44\u6599\u5361 ---------------- */
+
+async function openUserCard(u) {
+  if (!u || !u.id) return;
+  const isSelf = Number(u.id) === Number(S.me.id);
+  const isFriend = S.friends.some((f) => Number(f.id) === Number(u.id));
+  const blocked = S.blocks.some((b) => Number(b.id) === Number(u.id));
+
+  let acts = '';
+  if (isSelf) {
+    acts = '<div class="item" data-act="open-settings"><div class="txt"><div class="t1">\u7f16\u8f91\u6211\u7684\u8d44\u6599</div>'
+      + '</div><span class="arrow">\u203a</span></div>';
+  } else {
+    acts = '<div class="item" data-act="dm-from-card" data-id="' + u.id + '"><div class="txt">'
+      + '<div class="t1">\u53d1\u6d88\u606f</div></div><span class="arrow">\u203a</span></div>';
+    if (isFriend) {
+      acts += '<div class="item" data-act="alias-from-card" data-id="' + u.id + '"><div class="txt">'
+        + '<div class="t1">\u8bbe\u7f6e\u5907\u6ce8</div></div><span class="arrow">\u203a</span></div>'
+        + '<div class="item" data-act="' + (blocked ? 'unblock' : 'block') + '" data-id="' + u.id + '"><div class="txt">'
+        + '<div class="t1">' + (blocked ? '\u89e3\u9664\u9ed1\u540d\u5355' : '\u52a0\u5165\u9ed1\u540d\u5355')
+        + '</div></div></div>'
+        + '<div class="item" data-act="unfriend" data-id="' + u.id + '"><div class="txt">'
+        + '<div class="t1" style="color:var(--danger)">\u5220\u9664\u597d\u53cb</div></div></div>';
+    }
+  }
+
+  const tag = u.is_sub ? ' \u00b7 WSS' : (u.role === 'admin' ? ' \u00b7 \u7ba1\u7406\u5458' : '');
+  openSheet(null,
+    '<div class="ucard">'
+    + '<div class="ucard-hero">' + coverImg(u)
+    + '<div class="cover-scrim"></div>'
+    + '<button class="ucard-close" data-close="1">\u2715</button>'
+    + '<img class="ucard-av" src="' + esc(avatarSrc(u) || ICON) + '" alt=""></div>'
+    + '<div class="ucard-body"><div class="ucard-name">' + esc(displayName(u)) + '</div>'
+    + '<div class="ucard-user">@' + esc(u.username) + esc(tag) + '</div></div>'
+    + '<div class="ucard-acts set-group" style="border-radius:0">' + acts + '</div>'
+    + '</div>', '', 'ucard-sheet');
+}
+
+async function openAliasSheet(uid) {
+  let convId = 0, alias = '';
+  try {
+    const d = await api('/api/conversations', 'POST', { kind: 'direct', peer_id: Number(uid) });
+    convId = d.conv_id;
+    const full = await api('/api/conversations/' + convId);
+    const mine = (full.members || []).find((m) => Number(m.id) === Number(S.me.id));
+    alias = (mine && mine.alias) || '';
+  } catch (e) {
+    toast(e.message || '\u65e0\u6cd5\u6253\u5f00\u4f1a\u8bdd');
+    return;
+  }
+  document.querySelectorAll('.mask').forEach((m) => m.remove());
+  openSheet('\u8bbe\u7f6e\u5907\u6ce8',
+    '<div class="mini-form"><label>\u7ed9 TA \u7684\u5907\u6ce8\uff08\u7559\u7a7a\u53d6\u6d88\uff09</label>'
+    + '<input id="alias-in" maxlength="20" value="' + esc(alias) + '">'
+    + '<button class="btn" data-act="save-alias" data-conv="' + convId + '">\u4fdd\u5b58</button></div>', '');
 }
 
 function editProfile() { openSettings(); }
@@ -1262,7 +1435,21 @@ document.addEventListener('click', async (e) => {
     else if (act === 'drawer-admin') { location.href = BASE + '/admin'; }
     else if (act === 'drawer-profile') { closeDrawer(); openSettings(); }
     else if (act === 'pick-avatar') { const f = $('#av-file'); if (f) f.click(); }
+    else if (act === 'pick-cover') { const f = $('#cover-file'); if (f) f.click(); }
     else if (act === 'crop-save') { await saveCrop(); }
+    else if (act === 'user-card') {
+      let u = S.friends.find((x) => Number(x.id) === Number(id));
+      if (!u && S.cur) u = (S.cur.members || []).find((x) => Number(x.id) === Number(id));
+      if (!u && Number(id) === Number(S.me.id)) u = S.me;
+      if (u) openUserCard(u);
+    }
+    else if (act === 'dm-from-card') {
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      const d = await api('/api/conversations', 'POST', { kind: 'direct', peer_id: Number(id) });
+      await loadConvs(true);
+      openConv(d.conv_id);
+    }
+    else if (act === 'alias-from-card') { await openAliasSheet(Number(id)); }
     else if (act === 'edit-name') { editName(); }
     else if (act === 'password') { changePassword(); }
     else if (act === 'open-conv') { openConv(Number(id)); }
@@ -1315,10 +1502,16 @@ document.addEventListener('click', async (e) => {
     }
     else if (act === 'save-alias') {
       const v = $('#alias-in').value.trim();
-      await api('/api/conversations/' + S.cur.id + '/alias', 'POST', { alias: v });
+      const cid = el.getAttribute('data-conv') || (S.cur ? S.cur.id : 0);
+      if (!cid) { toast('会话不存在'); return; }
+      await api('/api/conversations/' + cid + '/alias', 'POST', { alias: v });
       toast('备注已保存');
       document.querySelectorAll('.mask').forEach((m) => m.remove());
       await loadConvs(true);
+      if (S.cur && Number(S.cur.id) === Number(cid)) {
+        S.cur.title = v || S.cur.title;
+        $('#chat-title').textContent = S.cur.title;
+      }
     }
     else if (act === 'save-gname') {
       const v = $('#gname-in').value.trim();
@@ -1337,20 +1530,36 @@ document.addEventListener('click', async (e) => {
       showList();
     }
     else if (act === 'new-sub') {
-      const name = $('#sub-name').value.trim();
-      const pass = $('#sub-pass').value;
-      if (!name || pass.length < 6) { toast('子账号名必填，密码至少 6 位'); return; }
-      await api('/api/subs', 'POST', { username: name, password: pass });
-      toast('子账号已创建');
+      const dn = ($('#sub-dn-new') ? $('#sub-dn-new').value.trim() : '');
+      const pass = $('#sub-pw-new').value;
+      if (pass.length < 6) { toast('密码至少 6 位'); return; }
+      await api('/api/subs', 'POST', { display_name: dn || 'WSS 账号', password: pass });
+      toast('WSS 账号已创建');
       await loadSubs();
-      showContacts();
+      renderSettings();
+    }
+    else if (act === 'save-sub-dn') {
+      const dn = $('#sub-dn').value.trim();
+      if (!dn) { toast('显示名不能为空'); return; }
+      await api('/api/subs/' + id, 'POST', { display_name: dn });
+      toast('显示名已保存');
+      await loadSubs();
+      renderSettings();
+    }
+    else if (act === 'save-sub-pw') {
+      const pw = $('#sub-pw').value;
+      if (pw.length < 6) { toast('密码至少 6 位'); return; }
+      await api('/api/subs/' + id, 'POST', { password: pw });
+      toast('密码已重设，旧连接会断开');
+      await loadSubs();
+      renderSettings();
     }
     else if (act === 'del-sub') {
-      if (!confirm('删除这个子账号？')) return;
+      if (!confirm('删除这个 WSS 账号？它的聊天记录会保留。')) return;
       await api('/api/subs/' + id, 'DELETE');
       toast('已删除');
       await loadSubs();
-      showContacts();
+      renderSettings();
     }
     else if (act === 'ann-read') {
       await api('/api/announcements/' + id + '/read', 'POST', {});
@@ -1396,6 +1605,13 @@ document.addEventListener('click', async (e) => {
 });
 
 $('#search').addEventListener('input', renderConvs);
+
+/* 点聊天标题看对方资料卡 */
+$('#chat-title').addEventListener('click', () => {
+  if (!S.cur || S.cur.kind !== 'direct') return;
+  const peer = (S.cur.members || []).find((m) => Number(m.id) !== Number(S.me.id)) || S.cur.peer;
+  if (peer && peer.id) openUserCard(peer);
+});
 
 $('#input').addEventListener('input', function () { autoGrow(this); });
 $('#input').addEventListener('keydown', function (e) {
@@ -1465,8 +1681,8 @@ th{background:var(--soft);font-weight:600;color:#555;font-size:12px}
 tbody tr:last-child td{border-bottom:0}
 .tbl-wrap{overflow-x:auto;border-radius:12px}
 .mini{font-size:12px;padding:5px 9px;border-radius:7px;background:var(--soft);border:1px solid var(--line)}
-.mini.danger{color:var(--danger);border-color:#ffd7d5;background:#fff5f5}
-.mini.ok{color:var(--brand-d);border-color:#c8ebd6;background:#f2fbf5}
+.mini.danger{color:var(--danger);border-color:#eec4b8;background:#fdf3ee}
+.mini.ok{color:var(--brand-d);border-color:#c8ebd6;background:#f8f2e6}
 .form-card{background:var(--panel);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:9px}
 .form-card input,.form-card textarea{padding:10px 12px;border:1px solid var(--line);border-radius:9px;
   background:var(--soft);outline:none;resize:vertical}
@@ -1635,7 +1851,7 @@ def admin_page(user, store=None, hub=None, base=None):
     <input id="nu-name" placeholder="用户名">
     <input id="nu-pass" type="password" placeholder="密码（≥6 位）">
     <input id="nu-email" type="email" placeholder="邮箱（可选）">
-    <select id="nu-role" style="padding:10px 12px;border:1px solid #e8e8e8;border-radius:9px;background:#f7f7f7">
+    <select id="nu-role" style="padding:10px 12px;border:1px solid #eadfcc;border-radius:9px;background:#fbf7ef">
       <option value="user">普通用户</option>
       <option value="admin">管理员</option>
     </select>

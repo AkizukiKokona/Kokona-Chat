@@ -15,6 +15,14 @@ def _row(row):
     return dict(row) if row is not None else None
 
 
+def _opt(row, key):
+    """sqlite3.Row 缺列会抛 IndexError；老库/老查询里没有的字段统一当空串。"""
+    try:
+        return row[key] or ""
+    except (IndexError, KeyError):
+        return ""
+
+
 def user_brief(row):
     if row is None:
         return None
@@ -23,6 +31,7 @@ def user_brief(row):
         "username": row["username"],
         "display_name": row["display_name"] or row["username"],
         "avatar": row["avatar"] or "",
+        "cover": _opt(row, "cover"),
         "is_sub": int(row["is_sub"] or 0),
         "role": row["role"],
     }
@@ -253,7 +262,7 @@ def _trim(conv_id):
 def recent_messages(conv_id, limit=None):
     limit = int(limit or config.HISTORY_MAX)
     rows = db.qall(
-        "SELECT m.*, u.username, u.display_name, u.avatar, u.is_sub, u.role "
+        "SELECT m.*, u.username, u.display_name, u.avatar, u.cover, u.is_sub, u.role "
         "FROM messages m LEFT JOIN users u ON u.id = m.sender_id "
         "WHERE m.conv_id = ? ORDER BY m.id DESC LIMIT ?",
         (int(conv_id), limit),
