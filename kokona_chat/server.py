@@ -983,7 +983,7 @@ class Handler(BaseHTTPRequestHandler):
                 if opcode != wskit.OP_TEXT:
                     continue
                 text = payload.decode("utf-8", "replace")
-                replies = _handle_ws_message(user, text)
+                replies = _handle_ws_message(user, text, conn)
                 for item in replies:
                     conn.send_json(json.dumps(item, ensure_ascii=False))
         except Exception:
@@ -994,7 +994,7 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
 
 
-def _handle_ws_message(user, text):
+def _handle_ws_message(user, text, conn=None):
     """程序端发来的帧：{"action": "...", ...}。返回要回给它的消息列表。"""
     try:
         msg = json.loads(text)
@@ -1004,6 +1004,61 @@ def _handle_ws_message(user, text):
         msg = {"action": "send", "text": str(msg)}
 
     action = str(msg.get("action") or "send")
+
+    # ---------------- PKN：账号专属 WSS 聊天 ----------------
+    if action == "pkn.hello":
+        cid = store.get_or_create_pkn(user["id"])
+        if cid is None:
+            return [{"type": "error", "error": "这个账号没有可用的 WSS 聊天"}]
+        if conn is not None:
+            conn.pkn_conv = cid
+        conv = store.conv_row(cid)
+        peer = None
+        if conv is not None and conv["kind"] == "direct":
+            pid = store._peer_of_direct(conv, user["id"])
+            peer = store.user_brief(db.qone("SELECT * FROM users WHERE id = ?", (pid,)))
+        title = (conv["title"] if conv is not None else "") or ""
+        if not title:
+            title = ("与 %s 的聊天" % (peer["display_name"] if peer else "主账号"))
+        return [{
+            "type": "pkn.welcome",
+            "version": 1,
+            "chat": {"conv_id": cid, "kind": conv["kind"] if conv else "pkn", "title": title},
+            "user": store.user_brief(user),
+            "peer": peer,
+            "messages": store.recent_messages(cid, 50),
+        }]
+
+    if action == "pkn.send":
+        cid = getattr(conn, "pkn_conv", None) if conn is not None else None
+        if cid is None:
+            return [{"type": "error", "error": "先发 pkn.hello 绑定专属聊天"}]
+        body = str(msg.get("text") or "").strip()
+        if not body:
+            return [{"type": "error", "error": "消息为空"}]
+        m = store.append_message(cid, user["id"], body)
+        if m is None:
+            return [{"type": "error", "error": "消息为空"}]
+        store.mark_read(cid, user["id"], m["id"])
+        # 广播会把这条包成 pkn.message 推回自己，所以不再单独回执
+        HUB.push_conversation(store.member_ids(cid), {"type": "message", "conv_id": cid, "message": m})
+        return []
+
+    if action == "pkn.history":
+        cid = getattr(conn, "pkn_conv", None) if conn is not None else None
+        if cid is None:
+            return [{"type": "error", "error": "先发 pkn.hello 绑定专属聊天"}]
+        try:
+            limit = int(msg.get("limit") or 100)
+        except Exception:
+            limit = 100
+        limit = max(1, min(100, limit))
+        return [{"type": "pkn.history", "messages": store.recent_messages(cid, limit)}]
+
+    if action == "pkn.bye":
+        if conn is not None:
+            conn.pkn_conv = None
+        return [{"type": "pkn.bye"}]
 
     if action == "ping":
         return [{"type": "pong", "t": int(time.time())}]

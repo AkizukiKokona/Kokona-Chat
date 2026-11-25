@@ -64,7 +64,14 @@ class Hub:
             self.sse_detach(uid, q)
         for uid, conn in dead_ws:
             try:
-                conn.send_json(text)
+                pkn = getattr(conn, "pkn_conv", None)
+                if pkn is None:
+                    conn.send_json(text)
+                else:
+                    # PKN 连接只关心自己那条专属聊天，帧名换成 pkn.*
+                    frame = _pkn_frame(payload, int(pkn))
+                    if frame is not None:
+                        conn.send_json(json.dumps(frame, ensure_ascii=False))
             except Exception:
                 conn.alive = False
             if not conn.alive:
@@ -77,3 +84,14 @@ class Hub:
 
     def push_user(self, user_id, payload):
         return self._deliver([int(user_id)], payload)
+
+
+def _pkn_frame(payload, conv_id):
+    """把通用事件翻译成 PKN 连接能收的帧；与它无关的返回 None。"""
+    kind = payload.get("type")
+    cid = int(payload.get("conv_id") or 0)
+    if kind == "message" and cid == conv_id:
+        return {"type": "pkn.message", "message": payload.get("message")}
+    if kind == "conversation_removed" and cid == conv_id:
+        return {"type": "pkn.closed"}
+    return None

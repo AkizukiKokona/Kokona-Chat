@@ -76,6 +76,9 @@ class WSConn:
         self.user = user
         self.lock = threading.Lock()
         self.alive = True
+        # 非 None 表示这条连接已经通过 pkn.hello 绑定到专属聊天，
+        # 之后只收这个会话的消息，帧类型统一包成 pkn.*
+        self.pkn_conv = None
 
     def send(self, opcode, payload):
         if not self.alive:

@@ -405,3 +405,45 @@ def unread_announcements(user_id):
         (int(user_id),),
     )
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------- PKN 专属聊天
+
+PKN_TITLE = "我的 WSS 聊天"
+
+
+def get_or_create_pkn(user_id):
+    """每个账号一个专属 WSS 聊天。
+
+    - 主账号：单人会话（kind=pkn），程序端和网页端都在这里说话。
+    - 子账号：直接复用它与主账号的那条私聊，规则不变（子账号只能和主账号聊）。
+
+    dm_key 复用为 "pkn:<uid>"，靠唯一索引保证只建一次。
+    """
+    row = db.qone("SELECT * FROM users WHERE id = ?", (int(user_id),))
+    if row is None:
+        return None
+
+    if int(row["is_sub"] or 0) == 1:
+        parent = int(row["parent_id"] or 0)
+        if parent == 0:
+            return None
+        return get_or_create_dm(parent, row["id"])
+
+    key = "pkn:%d" % int(user_id)
+    hit = db.qone("SELECT id FROM conversations WHERE dm_key = ?", (key,))
+    if hit is not None:
+        return int(hit["id"])
+
+    t = db.now()
+    cur = db.run(
+        "INSERT INTO conversations (kind, title, dm_key, created_by, created_at, last_at) "
+        "VALUES ('pkn', ?, ?, ?, ?, ?)",
+        (PKN_TITLE, key, int(user_id), t, t),
+    )
+    cid = int(cur.lastrowid)
+    db.run(
+        "INSERT OR IGNORE INTO conversation_members (conv_id, user_id, joined_at) VALUES (?, ?, ?)",
+        (cid, int(user_id), t),
+    )
+    return cid
