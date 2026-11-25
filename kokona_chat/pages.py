@@ -107,7 +107,9 @@ a{color:var(--brand-d);text-decoration:none}
   word-break:break-word;white-space:pre-wrap;box-shadow:0 1px 1px rgba(0,0,0,.04);position:relative;
   cursor:pointer}
 .row.me .bubble{background:var(--bubble-me)}
-.b-meta{font-size:11px;color:var(--sub);margin-bottom:3px}
+.col{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;max-width:min(74%,560px)}
+.col .bubble{max-width:100%}
+.b-meta{font-size:11px;color:var(--sub);padding:0 2px;line-height:1.3}
 .sys{text-align:center;font-size:12px;color:var(--sub);margin:10px 0}
 .composer{display:flex;gap:8px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);
   align-items:flex-end;flex:0 0 auto;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
@@ -1032,10 +1034,15 @@ async function openConv(id) {
 
 function msgHtml(m) {
   const mine = S.me && m.sender_id === S.me.id;
-  const who = mine ? '' : '<div class="b-meta">' + esc(displayName(m.sender)) + '</div>';
+  const kind = (S.cur && S.cur.kind) || 'direct';
+  // 私聊（含 WSS 那条）不显示名字；群聊/频道里别人的消息，名字放在气泡上方
+  const showName = !mine && kind !== 'direct' && kind !== 'pkn';
+  const bubble = '<div class="bubble">' + esc(m.body) + '</div>';
+  const inner = showName
+    ? '<div class="col"><div class="b-meta">' + esc(displayName(m.sender)) + '</div>' + bubble + '</div>'
+    : bubble;
   return '<div class="row' + (mine ? ' me' : '') + '" data-mid="' + m.id + '" data-ts="' + m.created_at + '">'
-    + avatar(m.sender, 'sm')
-    + '<div class="bubble">' + who + esc(m.body) + '</div></div>';
+    + avatar(m.sender, 'sm') + inner + '</div>';
 }
 
 function renderMsgs() {
