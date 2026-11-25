@@ -136,8 +136,8 @@ a{color:var(--brand-d);text-decoration:none}
   align-items:center;justify-content:center;overflow:hidden;padding:4px}
 .tray-cell img{max-width:100%;max-height:100%;object-fit:contain}
 .tray-cell.up{color:var(--sub);background:#f7f3ea;border:1px dashed var(--line)}
-.tray-big{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.tray-big button{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:12px;
+.tray-big{display:flex;gap:10px;padding:2px}
+.tray-big button{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:12px;width:64px;
   color:var(--text);background:transparent}
 .tray-big .ic{width:54px;height:54px;border-radius:14px;background:var(--soft);
   display:flex;align-items:center;justify-content:center;color:var(--brand)}
@@ -154,6 +154,13 @@ a{color:var(--brand-d);text-decoration:none}
 .tray-tip{color:var(--sub);font-size:12px;text-align:center;padding:16px 8px;line-height:1.7}
 .cmb:active{color:var(--brand)}
 .bubble.img{padding:4px;background:transparent;box-shadow:none;max-width:min(72%,240px)}
+.bubble.hold{position:relative;padding:4px;background:transparent;box-shadow:none;
+  max-width:min(72%,240px);overflow:hidden}
+.bubble.hold img{display:block;width:100%;height:auto;border-radius:10px;background:var(--soft)}
+.up-mask{position:absolute;inset:4px;border-radius:10px;background:rgba(28,24,20,.46);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#fff}
+.up-mask .pct{font-size:18px;font-weight:600;line-height:1}
+.up-mask .lbl{font-size:11px;opacity:.9}
 .bubble.img img{display:block;width:100%;height:auto;border-radius:10px;background:var(--soft)}
 .recall{color:var(--sub);font-size:12px;text-align:center;margin:8px 0}
 .st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:10px;padding:4px 2px}
@@ -1262,16 +1269,73 @@ async function fileToWebp(file) {
   return data;
 }
 
+function uploadMedia(data, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', BASE + '/api/media');
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      let d = null;
+      try { d = JSON.parse(xhr.responseText); } catch (e) { /* 非 JSON 按失败处理 */ }
+      if (xhr.status === 200 && d && d.ok) resolve(d);
+      else reject(new Error((d && d.error) || '上传失败'));
+    };
+    xhr.onerror = () => reject(new Error('网络错误'));
+    xhr.send(JSON.stringify({ data: data }));
+  });
+}
+
+let tempSeq = 0;
+
 async function sendImageFile(file) {
   if (!S.cur) return;
+  const cid = S.cur.id;
+  const url = URL.createObjectURL(file);
+  const tid = 'tmp-' + (++tempSeq);
+  const box = $('#msgs');
+  if (!S.msgs.length) box.innerHTML = '';
+  box.insertAdjacentHTML('beforeend',
+    '<div class="row me" id="' + tid + '">'
+    + '<div class="bubble hold"><img src="' + url + '" alt="">'
+    + '<div class="up-mask"><span class="pct">0%</span><span class="lbl">压缩中</span></div>'
+    + '</div></div>');
+  const row = $('#' + tid);
+  const pctEl = row.querySelector('.pct');
+  const lblEl = row.querySelector('.lbl');
+  const setP = (p, label) => {
+    pctEl.textContent = Math.round(p) + '%';
+    if (label) lblEl.textContent = label;
+  };
+  scrollBottom(true);
+
+  // 压缩这一步拿不到真实进度，先缓慢爬到四成，压完再交给上传
+  let fake = 0;
+  const timer = setInterval(() => {
+    fake = Math.min(42, fake + 5);
+    setP(fake);
+  }, 100);
+
   try {
-    toast('压缩图片…');
     const data = await fileToWebp(file);
-    const up = await api('/api/media', 'POST', { data: data });
-    await api('/api/conversations/' + S.cur.id + '/messages', 'POST',
+    clearInterval(timer);
+    setP(44, '发送中');
+    const up = await uploadMedia(data, (r) => setP(44 + r * 50));
+    setP(96, '发送中');
+    const d = await api('/api/conversations/' + cid + '/messages', 'POST',
       { media_id: up.media.id, body: '' });
+    setP(100);
+    row.remove();
+    // 上传期间切走了会话就别往当前列表里塞
+    if (d.message && S.cur && Number(S.cur.id) === Number(cid)) appendMsg(d.message);
   } catch (e) {
+    clearInterval(timer);
+    row.remove();
     toast('图片发送失败：' + (e.message || '未知错误'));
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 }
 
@@ -1313,45 +1377,50 @@ function renderPlusTray() {
     + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5">'
     + '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/>'
     + '<path d="M5 17l4.5-4.5 3.5 3.5 2.5-2.5L20 17" stroke-linecap="round"/></svg></span>图片</button>'
-    + '<button data-act="open-stickers"><span class="ic">'
-    + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5">'
-    + '<circle cx="12" cy="12" r="9"/><path d="M9 9.6h.01M15 9.6h.01" stroke-linecap="round"/>'
-    + '<path d="M8.4 14.2c.9 1.2 2.1 1.8 3.6 1.8s2.7-.6 3.6-1.8" stroke-linecap="round"/></svg>'
-    + '</span>表情包</button></div>';
+    + '</div>';
+}
+
+const ST_UP_CELL = '<div class="tray-cell up" data-act="upload-sticker" title="上传表情">'
+  + '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"'
+  + ' stroke-width="1.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></div>';
+
+function paintStickerTray(list, tip, note) {
+  const t = $('#tray');
+  if (!t) return;
+  t.innerHTML = '<div class="tray-grid" id="st-grid">'
+    + (list || []).map((st) => '<div class="tray-cell" data-act="send-sticker" data-id="' + st.id + '">'
+      + '<img src="' + esc(st.url) + '" alt=""></div>').join('')
+    + ST_UP_CELL + '</div>'
+    + '<div class="tray-tip" style="padding:10px 4px 2px">' + tip + '</div>'
+    + (note ? '<div class="tray-tip" style="padding:0 8px 10px">' + note + '</div>' : '');
+  $$('.tray-cell[data-id]', t).forEach((cell) => {
+    bindLongPress(cell, () => deleteSticker(Number(cell.getAttribute('data-id'))));
+  });
+  const g = $('#st-grid');
+  if (g) {
+    g.addEventListener('click', (ev) => {
+      if (ev.target.closest('[data-act]')) return;
+      const f = $('#st-file');
+      if (f) f.click();
+    });
+  }
 }
 
 async function renderStickerTray() {
-  const t = $('#tray');
-  t.innerHTML = '<div class="tray-tip">读取表情…</div>';
+  // 先铺骨架：不管接口成不成，上传格和提示都在，不会卡在「读取中」
+  paintStickerTray(STICKERS, '读取中…', '');
   try {
-    const d = await api('/api/stickers');
+    const d = await Promise.race([
+      api('/api/stickers'),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('超时')), 8000)),
+    ]);
     STICKERS = d.stickers || [];
-    const upCell = '<div class="tray-cell up" data-act="upload-sticker" title="上传表情">'
-      + '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"'
-      + ' stroke-width="1.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></div>';
-    const grid = '<div class="tray-grid" id="st-grid">'
-      + (STICKERS.length
-        ? STICKERS.map((st) => '<div class="tray-cell" data-act="send-sticker" data-id="' + st.id + '">'
-          + '<img src="' + esc(st.url) + '" alt=""></div>').join('')
-        : '')
-      + upCell + '</div>'
-      + (STICKERS.length ? '' : '<div class="tray-tip">还没有表情，点上面的 ＋ 上传，或长按聊天里的图片存下来</div>');
-    t.innerHTML = grid + '<div class="tray-tip" style="padding:10px 4px 2px">'
-      + (d.limit ? ('已存 ' + STICKERS.length + ' / ' + d.limit) : ('已存 ' + STICKERS.length))
-      + ' · 长按删除 · 点空白处上传</div>';
-    $$('.tray-cell', t).forEach((cell) => {
-      bindLongPress(cell, () => deleteSticker(Number(cell.getAttribute('data-id'))));
-    });
-    const g = $('#st-grid');
-    if (g) {
-      g.addEventListener('click', (ev) => {
-        if (ev.target.closest('[data-act]')) return;
-        const f = $('#st-file');
-        if (f) f.click();
-      });
-    }
+    const tip = d.limit
+      ? ('已存 ' + STICKERS.length + ' / ' + d.limit + ' · 长按删除 · 点空白处上传')
+      : ('已存 ' + STICKERS.length + ' · 长按删除 · 点空白处上传');
+    paintStickerTray(STICKERS, tip, STICKERS.length ? '' : '还没有表情，点 ＋ 上传，或长按聊天里的图片存下来');
   } catch (e) {
-    t.innerHTML = '<div class="tray-tip">表情读取失败：' + esc(e.message) + '</div>';
+    paintStickerTray(STICKERS, '表情读取失败，点 ＋ 上传', '');
   }
 }
 
@@ -1370,12 +1439,6 @@ const onStickerPicked = (e) => {
   e.target.value = '';
   if (file) uploadSticker(file);
 };
-
-async function sendSticker(id) {
-  try {
-    await api('/api/conversations/' + S.cur.id + '/messages', 'POST', { media_id: id, body: '' });
-  } catch (e) { toast(e.message); }
-}
 
 async function deleteSticker(id) {
   try {
@@ -1493,7 +1556,10 @@ function openMsgMenu(mid) {
   if (canRecall(m)) items.push(['recall-msg', '撤回', m.id]);
   if (m.kind !== 'image') items.push(['select-msg', '选择文本', m.id]);
   items.push(['hide-msg', '删除', m.id]);
-  if (m.kind === 'image' && m.media && m.media.id) items.push(['save-sticker', '存表情', m.media.id]);
+  if (m.kind === 'image' && m.media && m.media.id) {
+    items.push(['save-media', '保存图片', m.id]);
+    items.push(['save-sticker', '存表情', m.media.id]);
+  }
 
   const box = document.createElement('div');
   box.className = 'msg-menu';
@@ -1551,6 +1617,27 @@ async function hideMsg(id) {
     renderMsgs();
     toast('已删除');
   } catch (e) { toast(e.message); }
+}
+
+async function saveMedia(mid) {
+  const m = msgById(mid);
+  closeMsgMenu();
+  if (!m || !m.media || !m.media.url) return;
+  const name = 'kokona-' + m.id + '.webp';
+  try {
+    const r = await fetch(m.media.url, { cache: 'force-cache' });
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('已保存');
+  } catch (e) {
+    window.open(m.media.url, '_blank');
+  }
 }
 
 async function saveSticker(mediaId) {
@@ -2258,6 +2345,7 @@ document.addEventListener('click', async (e) => {
     else if (act === 'recall-msg') { await recallMsg(Number(id)); }
     else if (act === 'select-msg') { selectMsgText(Number(id)); }
     else if (act === 'hide-msg') { await hideMsg(Number(id)); }
+    else if (act === 'save-media') { await saveMedia(Number(id)); }
     else if (act === 'save-sticker') { await saveSticker(Number(id)); }
     else if (act === 'view-image') { openViewImage(el.getAttribute('data-src')); }
     else if (act === 'msg-user') {
