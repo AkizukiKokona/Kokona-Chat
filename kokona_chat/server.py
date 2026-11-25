@@ -682,7 +682,11 @@ def push_notify(cid, msg):
         if conv is None or conv["kind"] == "legacy":
             return
         sender_id = int(msg.get("sender_id") or 0)
-        body = "[图片]" if msg.get("kind") == "image" else str(msg.get("body") or "")
+        if msg.get("kind") == "image":
+            mid = (msg.get("media") or {}).get("id")
+            body = "[表情]" if mid and store.is_sticker_media(mid) else "[图片]"
+        else:
+            body = str(msg.get("body") or "")
         mentioned = {int(x) for x in (msg.get("mentions") or [])}
         body = body[:120]
         for uid in store.member_ids(cid):

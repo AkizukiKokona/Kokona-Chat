@@ -146,10 +146,11 @@ body.kb-tight .composer textarea{min-height:34px;padding:6px 10px}
 .tray{flex:0 0 auto;height:268px;overflow-y:auto;background:var(--panel);
   border-top:1px solid var(--line);padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
 .tray-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
-.tray-cell{min-width:0;aspect-ratio:1/1;border-radius:10px;background:var(--soft);display:flex;
+.tray-cell{position:relative;min-width:0;aspect-ratio:1/1;border-radius:10px;background:var(--soft);display:flex;
   align-items:center;justify-content:center;overflow:hidden;padding:4px}
 .tray-cell img{max-width:100%;max-height:100%;object-fit:contain}
 .tray-cell.up{color:var(--sub);background:#f7f3ea;border:1px dashed var(--line)}
+.tray-cell.uping .up-mask{inset:0}
 .tray-big{display:flex;gap:10px;padding:2px}
 .tray-big button{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:12px;width:64px;
   color:var(--text);background:transparent}
@@ -199,6 +200,10 @@ body.kb-tight .composer textarea{min-height:34px;padding:6px 10px}
 .st-cell img{max-width:100%;max-height:64px;display:block;border-radius:6px}
 .st-empty{color:var(--sub);font-size:13px;padding:18px 4px;text-align:center;line-height:1.7}
 .view-wrap img{width:100%;display:block;border-radius:10px}
+/* 聊天里的图片/表情：长按只出我们自己的菜单，不要系统那层「下载图片/拷贝图片」。
+   预览里反过来——那里本来就是看大图，把浏览器默认菜单还回去（显示图片、下载等）。 */
+img{-webkit-touch-callout:none;-webkit-user-drag:none;user-select:none}
+.view-wrap img{-webkit-touch-callout:default;-webkit-user-drag:auto;user-select:auto}
 .ucard-top{background:var(--cover-grad);padding:26px 20px 22px;border-radius:0}
 .chat-title.typing{color:var(--brand);font-weight:600;font-size:14px}
 .ucard-top .ucard-close{z-index:4}
@@ -1084,7 +1089,9 @@ function renderConvs() {
     return;
   }
   box.innerHTML = list.map((c) => {
-    const last = c.last ? String(c.last.body || '').slice(0, 40) : (c.kind === 'group' ? '群聊已创建' : '开始聊天吧');
+    const last = c.last
+      ? String(c.last.preview != null ? c.last.preview : (c.last.body || '')).slice(0, 40)
+      : (c.kind === 'group' ? '群聊已创建' : '开始聊天吧');
     const av = c.kind === 'direct' ? avatar(c.peer) : convAvatar(c);
     const badge = c.unread > 0 ? '<span class="badge">' + (c.unread > 99 ? '99+' : c.unread) + '</span>' : '';
     return '<div class="conv' + (S.openId === c.id ? ' on' : '') + '" data-act="open-conv" data-id="' + c.id + '">'
@@ -1518,13 +1525,47 @@ async function renderStickerTray() {
 }
 
 async function uploadSticker(file) {
+  // 面板里先放一张本地上传格，带灰蒙层和百分比，跟发图一个手感
+  const local = URL.createObjectURL(file);
+  let cell = null;
+  const grid = $('#st-grid');
+  if (grid && trayMode === 'stickers') {
+    cell = document.createElement('div');
+    cell.className = 'tray-cell uping';
+    cell.innerHTML = '<img src="' + local + '" alt="">'
+      + '<div class="up-mask"><span class="pct">0%</span><span class="lbl">压缩中</span></div>';
+    grid.insertBefore(cell, grid.firstChild);
+  }
+  const pctEl = cell && cell.querySelector('.pct');
+  const lblEl = cell && cell.querySelector('.lbl');
+  const setP = (p, label) => {
+    if (pctEl) pctEl.textContent = Math.round(p) + '%';
+    if (label && lblEl) lblEl.textContent = label;
+  };
+  // 压缩拿不到真实进度，先慢慢爬到四成
+  let fake = 0;
+  const timer = setInterval(() => {
+    fake = Math.min(40, fake + 4);
+    setP(fake);
+  }, 120);
   try {
     const data = await fileToWebp(file);
-    const up = await api('/api/media', 'POST', { data: data });
+    clearInterval(timer);
+    setP(44, '上传中');
+    const up = await uploadMedia(data, (r) => setP(44 + r * 52));
+    setP(98, '保存中');
     await api('/api/stickers', 'POST', { media_id: up.media.id });
+    setP(100, '完成');
+    if (cell) setTimeout(() => cell && cell.remove(), 260);
     toast('已存为表情');
     renderStickerTray();
-  } catch (e) { toast('上传失败：' + (e.message || '未知错误')); }
+  } catch (e) {
+    clearInterval(timer);
+    if (cell) cell.remove();
+    toast('上传失败：' + (e.message || '未知错误'));
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(local), 4000);
+  }
 }
 
 const onStickerPicked = (e) => {
@@ -2475,10 +2516,6 @@ document.addEventListener('pointerdown', (e) => {
   }
 }, true);
 
-/* 长按气泡时不弹系统的图片/文字菜单 */
-document.addEventListener('contextmenu', (e) => {
-  if (e.target.closest('.row')) e.preventDefault();
-});
 window.addEventListener('resize', closeMsgMenu);
 
 /* 触摸按压态用 class 控制，避免移动端 :active 黏在那一行 */
@@ -2765,6 +2802,17 @@ document.addEventListener('click', async (e) => {
 });
 
 $('#search').addEventListener('input', renderConvs);
+
+/* 长按/右键：聊天里的图和表情一律走我们自己的菜单，
+   系统那层「下载图片 / 拷贝图片」只在预览（.view-wrap）里保留。
+   输入框要放过，不然桌面端连粘贴菜单都没了。 */
+document.addEventListener('contextmenu', (e) => {
+  const t = e.target;
+  if (!t || !t.closest) return;
+  if (t.closest('.view-wrap')) return;
+  if (/^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+  if (t.tagName === 'IMG' || t.closest('.row') || t.closest('.tray')) e.preventDefault();
+});
 
 /* 点聊天标题看对方资料卡 */
 $('#chat-title').addEventListener('click', () => {

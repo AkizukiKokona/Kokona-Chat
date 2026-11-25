@@ -245,11 +245,13 @@ def list_conversations(user_id):
             "last_at": conv["last_at"],
         }
         last = db.qone(
-            "SELECT id, sender_id, body, created_at FROM messages "
+            "SELECT id, sender_id, body, kind, media_id, created_at FROM messages "
             "WHERE conv_id = ? ORDER BY id DESC LIMIT 1",
             (conv["id"],),
         )
         item["last"] = _row(last)
+        if item["last"] is not None:
+            item["last"]["preview"] = msg_preview(last)
         # 空的旧频道只是占位，别在列表里占位子
         if conv["kind"] == "legacy" and last is None:
             continue
@@ -388,6 +390,26 @@ def message_item(r):
     if not recalled and _opt(r, "media_id"):
         item["media"] = media_brief(db.qone("SELECT * FROM media WHERE id = ?", (int(r["media_id"]),)))
     return item
+
+
+def is_sticker_media(media_id):
+    """这张图是不是表情：任何人的表情库里存过它就算（发出去的消息只带 media_id）。"""
+    if not media_id:
+        return False
+    return db.qone(
+        "SELECT 1 AS x FROM stickers WHERE media_id = ? LIMIT 1", (int(media_id),)
+    ) is not None
+
+
+def msg_preview(r):
+    """列表/通知里的一行摘要。图片和表情必须出字，不能是空气。"""
+    if r is None:
+        return ""
+    if int(_opt(r, "recalled") or 0) == 1:
+        return "消息已撤回"
+    if (_opt(r, "kind") or "text") == "image":
+        return "[表情]" if is_sticker_media(_opt(r, "media_id")) else "[图片]"
+    return (r["body"] or "")
 
 
 def scan_mentions(conv, body):
