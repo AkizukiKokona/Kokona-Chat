@@ -97,6 +97,18 @@ nginx -t && systemctl reload nginx
 
 备份文件：`/etc/nginx/sites-available/akizukikokona.com.bak-*`
 
+## 邮件模板
+
+- `mailer._wrap()` 出 HTML，`send()` 组装成 `multipart/alternative`，HTML 那支再包一层
+  `multipart/related` 挂图标。**图标走 cid 内嵌**（`cid:kokona-icon`，读
+  `kokona_chat/static/icon.png`），不要改成外链 URL——多数客户端默认不加载远程图。
+- 视觉：纯色米底 `#efe4d2` + 白色卡片 + 棕金头部 `#9a6c3c`，头部左侧图标、右侧
+  产品名与 slogan；验证码是一块 `#f4e3c4` 的大字块。样式全内联，用 table 布局。
+- 文案规矩：**称呼用「您」**；只写事实（用途、验证码、有效期、发送时间北京时间、
+  站点地址），不写「感谢您的支持」「如有疑问请随时联系我们」这类客套。
+- 可配项：`CHAT_MAIL_NAME`（产品名）、`CHAT_SLOGAN`（头部副标题）、
+  `CHAT_SITE_URL`（页脚与隐藏预览里的站点地址）。
+
 ## 已知限制
 
 - **出站 25 被 VPS 上游封死**，自建 MTA 直投不可行。只能走 587/465 中继。

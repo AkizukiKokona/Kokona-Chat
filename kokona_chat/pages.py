@@ -158,10 +158,6 @@ a{color:var(--brand-d);text-decoration:none}
 .profile-card > .profile-av,
 .profile-card > .profile-name,
 .profile-card > .profile-id{position:relative;z-index:2}
-.cover-edit{position:absolute;right:12px;top:calc(10px + env(safe-area-inset-top));z-index:3;
-  padding:5px 10px;border-radius:999px;background:rgba(0,0,0,.32);color:#fff;font-size:11px;
-  backdrop-filter:blur(4px)}
-.cover-edit:active{background:rgba(0,0,0,.45)}
 .profile-av{width:66px;height:66px;border-radius:18px;object-fit:cover;
   border:2px solid rgba(255,255,255,.85);box-shadow:0 4px 14px rgba(0,0,0,.16);background:#fff}
 .profile-name{font-size:19px;font-weight:700;margin-top:12px}
@@ -601,7 +597,6 @@ APP_BODY = """<div class="app" id="app">
     <div class="profile-card" data-act="drawer-profile">
       <img class="cover-img hidden" id="drawer-cover" alt="">
       <div class="cover-scrim"></div>
-      <button class="cover-edit" data-act="pick-cover">换封面</button>
       <img class="profile-av" id="drawer-av" src="__BASE__/static/icon.png" alt="">
       <div class="profile-name" id="drawer-name"></div>
       <div class="profile-id" id="drawer-id"></div>
@@ -726,6 +721,7 @@ function renderDrawer() {
   const items = [
     ['open-settings', '⚙️', '设置'],
     ['drawer-contacts', '👥', '通讯录'],
+    ['drawer-addfriend', '➕', '添加好友'],
     ['drawer-ann', '📢', '公告板'],
     ['drawer-reload', '🔄', '刷新会话列表'],
   ];
@@ -973,7 +969,7 @@ function showContacts() {
         + avatar(f, 'sm') + '<div class="txt"><div class="t1">' + esc(displayName(f))
         + '</div><div class="t2">@' + esc(f.username) + '</div></div>'
         + '<span class="arrow">›</span></div>').join('')
-    : '<div class="empty">还没有好友，去下面搜一个吧</div>';
+    : '<div class="empty">通讯录还是空的，去「添加好友」搜一个吧</div>';
 
   const groups = S.convs.filter((c) => c.kind === 'group');
   const groupRows = groups.length
@@ -984,10 +980,17 @@ function showContacts() {
     : '<div class="empty">还没有群聊</div>';
 
   showPanel('通讯录',
-    '<div class="side-search" style="padding:0 0 12px"><input id="uq" placeholder="搜索用户名加好友"></div>'
-    + '<div id="user-results"></div>'
-    + '<h2>好友（' + S.friends.length + '）</h2><div class="card">' + friendRows + '</div>'
+    '<h2>好友（' + S.friends.length + '）</h2><div class="card">' + friendRows + '</div>'
     + '<h2>群聊（' + groups.length + '）</h2><div class="card">' + groupRows + '</div>'
+    + '<div class="set-note">要加新朋友，打开左上角菜单里的「添加好友」。</div>'
+  );
+}
+
+function showAddFriend() {
+  S.view = 'add';
+  showPanel('添加好友',
+    '<div class="side-search" style="padding:0 0 12px"><input id="uq" placeholder="输入用户名或显示名" autocomplete="off"></div>'
+    + '<div id="user-results"><div class="empty" style="padding:14px">支持模糊匹配，也能搜到自己</div></div>'
   );
 
   const uq = $('#uq');
@@ -996,6 +999,7 @@ function showContacts() {
     clearTimeout(timer);
     timer = setTimeout(doSearch, 320);
   });
+  setTimeout(() => uq.focus(), 60);
 }
 
 async function loadSubs() {
@@ -1017,11 +1021,17 @@ async function doSearch() {
     const users = d.users || [];
     if (!users.length) { box.innerHTML = '<div class="empty" style="padding:10px">没有找到用户</div>'; return; }
     box.innerHTML = '<div class="card">' + users.map((u) => {
-      const btn = u.is_friend
-        ? '<button class="code-btn" data-act="open-dm" data-id="' + u.id + '">聊天</button>'
-        : '<button class="code-btn" data-act="add-friend" data-id="' + u.id + '">添加</button>';
+      let btn;
+      if (u.is_self) {
+        btn = '<button class="code-btn" data-act="self-card">我的资料卡</button>';
+      } else if (u.is_friend) {
+        btn = '<button class="code-btn" data-act="open-dm" data-id="' + u.id + '">聊天</button>';
+      } else {
+        btn = '<button class="code-btn" data-act="add-friend" data-id="' + u.id + '">添加</button>';
+      }
+      const pill = u.is_self ? ' <span class="pill">我</span>' : '';
       return '<div class="item">' + avatar(u, 'sm') + '<div class="txt"><div class="t1">' + esc(displayName(u))
-        + '</div><div class="t2">@' + esc(u.username) + '</div></div>' + btn + '</div>';
+        + pill + '</div><div class="t2">@' + esc(u.username) + '</div></div>' + btn + '</div>';
     }).join('') + '</div>';
   } catch (e) { toast(e.message); }
 }
@@ -1430,7 +1440,8 @@ document.addEventListener('click', async (e) => {
 
   try {
     if (act === 'drawer-open') { openDrawer(); }
-    else if (act === 'drawer-contacts') { closeDrawer(); await loadSubs(); showContacts(); }
+    else if (act === 'drawer-contacts') { closeDrawer(); await loadFriends(); showContacts(); }
+    else if (act === 'drawer-addfriend') { closeDrawer(); await loadFriends(); showAddFriend(); }
     else if (act === 'drawer-ann') { closeDrawer(); openAnnList(); }
     else if (act === 'open-settings') { closeDrawer(); openSettings(); }
     else if (act === 'drawer-password') { closeDrawer(); changePassword(); }
@@ -1469,8 +1480,12 @@ document.addEventListener('click', async (e) => {
     else if (act === 'new-group') { document.querySelectorAll('.mask').forEach((m) => m.remove()); newGroup(); }
     else if (act === 'go-search') {
       document.querySelectorAll('.mask').forEach((m) => m.remove());
-      await loadSubs(); showContacts();
-      setTimeout(() => { const u = $('#uq'); if (u) u.focus(); }, 80);
+      await loadFriends();
+      showAddFriend();
+    }
+    else if (act === 'self-card') {
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      openUserCard(S.me);
     }
     else if (act === 'open-dm') {
       document.querySelectorAll('.mask').forEach((m) => m.remove());
@@ -1489,7 +1504,7 @@ document.addEventListener('click', async (e) => {
       toast('已删除好友');
       await loadFriends();
       document.querySelectorAll('.mask').forEach((m) => m.remove());
-      showContacts();
+      if (S.view === 'add') doSearch(); else showContacts();
     }
     else if (act === 'block') {
       await api('/api/blocks', 'POST', { peer_id: Number(id) });
@@ -1657,6 +1672,7 @@ def app_page(user, store=None, hub=None, base=None):
         "username": user["username"],
         "display_name": user["display_name"] or user["username"],
         "avatar": user["avatar"] or "",
+        "cover": (user["cover"] if "cover" in user.keys() else "") or "",
         "email": user["email"] or "",
         "role": user["role"],
         "is_admin": user["role"] == "admin",

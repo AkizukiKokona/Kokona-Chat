@@ -603,13 +603,14 @@ def api_search(c):
         return ok(users=[])
     rows = db.qall(
         "SELECT * FROM users WHERE (username LIKE ? OR display_name LIKE ?) "
-        "AND is_sub = 0 AND status = 'active' AND id != ? ORDER BY username LIMIT 20",
+        "AND is_sub = 0 AND status = 'active' ORDER BY (id = ?) DESC, username LIMIT 20",
         ("%" + kw + "%", "%" + kw + "%", user["id"]),
     )
     out = []
     for r in rows:
         item = store.user_brief(r)
         item["is_friend"] = store.are_friends(user["id"], r["id"])
+        item["is_self"] = int(r["id"]) == int(user["id"])
         out.append(item)
     return ok(users=out)
 
