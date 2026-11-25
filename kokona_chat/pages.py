@@ -18,9 +18,7 @@ BASE_CSS = """
   --ta-max:102px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{height:100%;overflow:hidden;overscroll-behavior:none}
-/* body 钉死：iOS 弹键盘时整页会被顶起来滚一段，钉住就滚不动了，白色缝隙也从源头没了 */
-body{margin:0;padding:0;height:100%;overflow:hidden;position:fixed;inset:0;overscroll-behavior:none}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;overscroll-behavior:none}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
   background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
@@ -65,10 +63,12 @@ a{color:var(--brand-d);text-decoration:none}
   border:1px solid #ffe082}
 
 /* ---------- 主界面 ---------- */
-/* 默认高度就是布局视口（安卓键盘会连布局视口一起缩，CSS 天然正确）；
-   只有 iOS / adjustPan 那种「键盘盖上来、视口不缩」的情况，JS 才写 --app-h、--vv-top */
-.app{position:fixed;left:0;right:0;top:var(--vv-top,0px);display:grid;grid-template-columns:340px 1fr;
-  height:var(--app-h,100%);overflow:hidden;min-height:0}
+/* inset:0 就是「铺满可见区」：键盘弹起时浏览器缩布局视口，它自己跟着缩，
+   不需要 JS 算高度，也就不会把某个中间值锁死（之前刷新后多一片白的根因）。
+   --app-h / --vv-top 只留给 iOS：聚焦期间临时缩，失焦立刻清掉。 */
+.app{position:fixed;top:var(--vv-top,0px);left:0;right:0;bottom:0;display:grid;
+  grid-template-columns:340px 1fr;overflow:hidden;min-height:0;
+  height:var(--app-h,auto)}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
 .side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
 .me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
@@ -2869,59 +2869,33 @@ function diagFlush(beacon) {
   await loadConvs(true);
   await loadFriends();
   await loadAnns();
-  // ---- 移动端键盘 ----
-  // 两种内核，两套机制，必须分开处理：
-  //   安卓 adjustResize：键盘一弹，布局视口跟着缩，CSS 的 100% 就是对的，
-  //                      JS 再写高度只会写进一个和真实可见区不一致的数——之前就是这里翻车；
-  //   iOS / adjustPan：布局视口不动，可见区被盖住，才需要 JS 把 app 高度改成可视高度。
-  // 判据：布局视口比可视视口高出 60px 以上 = 键盘是「盖」上去的，此时才接管。
+  // ---- 视口 / 键盘 ----
+  // 安卓（含 WebView、adjustResize）：键盘一弹布局视口就变矮，`.app{position:fixed;inset:0}`
+  // 会自动跟着缩，**这里一行高度都不写**。之前写过 --app-h，一旦把加载瞬间的中间值写成 px，
+  // 它就锁死了：输入栏停在半空、下面多一片白，刷新一次中一次、不刷新不再变——就是这个。
+  // iOS：键盘盖上来但布局视口不动，才在「有输入框聚焦」期间临时缩一下，失焦立刻还原。
+  const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const vv = window.visualViewport;
   const root = document.documentElement;
-  let applied = 'css';
-  window.syncViewport = () => {
-    const lh = Math.round(window.innerHeight || 0);      // 布局视口
-    const vh = vv ? Math.round(vv.height || 0) : lh;     // 可视视口
-    const top = vv ? Math.round(vv.offsetTop || 0) : 0;
-    const covered = lh - vh;
-    const overlay = lh > 0 && vh >= 80 && covered >= 60;
-    if (!overlay) {
-      // 交回 CSS：清掉 JS 写过的值，刷新那一下永远落在这条分支
-      if (applied !== 'css') {
-        applied = 'css';
-        root.style.removeProperty('--app-h');
-        root.style.removeProperty('--vv-top');
-        if (document.body.classList.contains('chat-open')) scrollBottom(true);
-        checkLayout();
-      }
-      diag('sync-css', { lh, vh, covered });
-      return;
-    }
-    const key = vh + ':' + top;
-    if (key === applied) return;
-    applied = key;
+  let kbFit = false;
+  function clearKbFit() {
+    if (!kbFit) return;
+    kbFit = false;
+    root.style.removeProperty('--app-h');
+    root.style.removeProperty('--vv-top');
+  }
+  function fitIosKeyboard() {
+    if (!IS_IOS || !vv) return;
+    const ae = document.activeElement;
+    const typing = ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName);
+    const lh = window.innerHeight || 0;
+    const vh = Math.round(vv.height || 0);
+    const zoomed = Math.abs((vv.scale || 1) - 1) > 0.02;
+    if (!typing || zoomed || !vh || vh >= lh - 80) { clearKbFit(); return; }
+    kbFit = true;
     root.style.setProperty('--app-h', vh + 'px');
-    root.style.setProperty('--vv-top', top + 'px');
-    if (document.body.classList.contains('chat-open')) scrollBottom(true);
-    checkLayout();
-    diag('sync-kb', { lh, vh, top, covered });
-  };
-  // 布局对不对，只有落在「看得见那块矩形」里才算对
-  function checkLayout() {
-    const app = document.querySelector('.app');
-    if (!app) return;
-    const r = app.getBoundingClientRect();
-    const vh = Math.round((vv ? vv.height : window.innerHeight) || 0);
-    const top = Math.round(vv ? vv.offsetTop || 0 : 0);
-    const comp = document.body.classList.contains('chat-open') ? document.querySelector('.composer') : null;
-    const cr = comp && comp.getBoundingClientRect();
-    const off = Math.abs(r.top - top) > 3 || Math.abs(r.bottom - (top + vh)) > 3;
-    const cut = cr && cr.height > 0 && (cr.bottom > top + vh + 3 || cr.top < top - 3);
-    if (off || cut) {
-      diag('bad', {
-        ah: Math.round(r.height), at: Math.round(r.top), ab: Math.round(r.bottom),
-        vh, top, cb: cr ? Math.round(cr.bottom) : 0
-      });
-    }
+    root.style.setProperty('--vv-top', Math.round(vv.offsetTop || 0) + 'px');
   }
   // 输入框上限按「4 行」算，跟视口高度脱钩：矮屏上也不会被压成一条缝
   function taCap() {
@@ -2936,15 +2910,46 @@ function diagFlush(beacon) {
     if (ta.value) autoGrow(ta);
   }
   taCap();
-  if (vv) {
-    vv.addEventListener('resize', window.syncViewport);
-    vv.addEventListener('scroll', window.syncViewport);
+  window.addEventListener('orientationchange', () => setTimeout(() => { clearKbFit(); taCap(); }, 240));
+  if (IS_IOS && vv) {
+    vv.addEventListener('resize', fitIosKeyboard);
+    vv.addEventListener('scroll', fitIosKeyboard);
+    document.addEventListener('focusin', () => setTimeout(fitIosKeyboard, 80));
+    document.addEventListener('focusout', () => setTimeout(clearKbFit, 120));
   }
-  window.addEventListener('resize', window.syncViewport);
-  window.addEventListener('orientationchange', () => setTimeout(() => { taCap(); window.syncViewport(); }, 280));
-  window.syncViewport();
-  // 老内核偶尔吞事件：低频对一次表，值没变就不写，不会闪
-  setInterval(() => { if (!document.hidden) window.syncViewport(); }, 800);
+  // 只观测、不干预：页面到底比屏幕矮多少，出问题时能直接从诊断里看出来
+  function geomSnap(tag) {
+    const app = document.querySelector('.app');
+    if (!app) return;
+    const r = app.getBoundingClientRect();
+    const lh = Math.round(window.innerHeight || 0);
+    const vh = Math.round((vv ? vv.height : window.innerHeight) || 0);
+    const gap = Math.round(lh - r.height);
+    const comp = document.querySelector('.composer');
+    const cb = comp && comp.getBoundingClientRect().height > 0
+      ? Math.round(comp.getBoundingClientRect().bottom) : 0;
+    // iOS 键盘期把「底」算在可视区，不然每次打字都会误报
+    const cgap = cb ? Math.round((kbFit ? vh : lh) - cb) : 0;
+    const tray = document.querySelector('#tray');
+    const trayOn = !!(tray && tray.offsetHeight > 0);
+    diag('geom', {
+      tag, lh, vh, sc: vv ? Number((vv.scale || 1).toFixed(2)) : 0,
+      top: Math.round(vv ? vv.offsetTop || 0 : 0),
+      ah: Math.round(r.height), ab: Math.round(r.bottom),
+      dh: document.documentElement.clientHeight, oh: window.outerHeight,
+      sh: window.screen ? screen.height : 0,
+      cb, cgap, tray: trayOn ? 1 : 0
+    });
+    // 「多一片白」的两种形态：整页比屏幕矮 / 输入栏没贴到底，都强制上报
+    if (Math.abs(gap) > 40 || cgap > 40) {
+      diag('bad', {
+        tag, gap, cgap, lh, vh, ah: Math.round(r.height), ab: Math.round(r.bottom), cb, tray: trayOn ? 1 : 0
+      });
+    }
+  }
+  geomSnap('boot');
+  setTimeout(() => geomSnap('t1'), 900);
+  setTimeout(() => geomSnap('t2'), 2600);
 
   window.addEventListener('error', (e) => diag('err', {
     msg: String(e.message || '').slice(0, 160),
@@ -2992,12 +2997,12 @@ function diagFlush(beacon) {
       diag('focus');
       closeTray();
       taCap();
-      // 键盘动画结束前 vv 是中间值，补几次校正
-      [120, 320, 600].forEach((d) => setTimeout(() => window.syncViewport && window.syncViewport(), d));
+      // 只让 iOS 补一次；安卓什么都不做
+      if (IS_IOS) [100, 300, 600].forEach((d) => setTimeout(fitIosKeyboard, d));
     });
     inputEl.addEventListener('blur', () => {
       diag('blur');
-      setTimeout(() => window.syncViewport && window.syncViewport(), 280);
+      clearKbFit();
     });
   }
   const stInput = $('#st-file');
