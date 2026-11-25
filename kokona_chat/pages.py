@@ -128,6 +128,12 @@ a{color:var(--brand-d);text-decoration:none}
 .composer textarea{flex:1 1 0;min-width:0;resize:none;max-height:var(--ta-max,104px);min-height:40px;padding:9px 12px;border-radius:9px;
   border:1px solid var(--line);background:var(--soft);outline:none;line-height:1.4;overflow-y:auto}
 .composer textarea:focus{border-color:var(--brand);background:#fff}
+/* 键盘把可视区压得很矮（手表/横屏）：头压扁、按钮缩小，省下的高度全给输入框，
+   否则「头 55 + 输入区 121」在 137px 的屏幕上必然把输入区挤出屏幕外 */
+body.kb-tight .chat-head{padding:2px 8px;padding-top:calc(2px + env(safe-area-inset-top))}
+body.kb-tight .chat-title{font-size:13px}
+body.kb-tight .composer{padding:4px 8px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
+body.kb-tight .composer textarea{min-height:34px;padding:6px 10px}
 .send-btn{flex:0 0 auto;padding:0 14px;height:40px;border-radius:9px;background:var(--brand);color:#fff;font-weight:600}
 .send-btn:active{background:var(--brand-d)}
 .cmb{display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex:0 0 auto;
@@ -2897,20 +2903,43 @@ function diagFlush(beacon) {
     root.style.setProperty('--app-h', vh + 'px');
     root.style.setProperty('--vv-top', Math.round(vv.offsetTop || 0) + 'px');
   }
-  // 输入框上限按「4 行」算，跟视口高度脱钩：矮屏上也不会被压成一条缝
+  // 输入框高度上限：正常给 4 行，键盘顶上来把可视区压到一百多像素时按剩余空间收
+  // （手表的真实数据：屏 292×356，键盘一弹 vh 只有 137，头 55，4 行 104 必然被裁掉）
   function taCap() {
     const ta = $('#input');
     if (!ta) return;
+    const vh = Math.round((vv ? vv.height : window.innerHeight) || 0);
+    // 太矮时把聊天头压扁，肉眼能多出一行
+    document.body.classList.toggle('kb-tight', vh > 0 && vh < 240);
     const cs = getComputedStyle(ta);
-    const fs = parseFloat(cs.fontSize) || 15;
-    const lh = parseFloat(cs.lineHeight) || Math.round(fs * 1.4);
+    const lh = parseFloat(cs.lineHeight) || 21;
     const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-    const cap = Math.round(lh * 4 + pad + 2);
-    root.style.setProperty('--ta-max', cap + 'px');
-    if (ta.value) autoGrow(ta);
+    const head = document.querySelector('.chat-head');
+    const headH = head ? head.offsetHeight : 0;
+    const comp = document.querySelector('.composer');
+    const ccs = comp ? getComputedStyle(comp) : null;
+    const cpad = ccs ? (parseFloat(ccs.paddingTop) || 0) + (parseFloat(ccs.paddingBottom) || 0) : 16;
+    let lines = 4;
+    if (vh > 80 && headH) {
+      const room = vh - headH - 24 - cpad - pad - 2; // 消息区至少留 24px
+      lines = Math.max(1, Math.min(4, Math.floor(room / lh)));
+    }
+    root.style.setProperty('--ta-max', Math.round(lines * lh + pad + 2) + 'px');
+    autoGrow(ta);
+  }
+  let capTick = 0;
+  function capSoon() {
+    if (capTick) return;
+    capTick = requestAnimationFrame(() => { capTick = 0; taCap(); });
   }
   taCap();
+  // 可视高度一变就重算上限（键盘弹出/收起、转屏都算）。只改 --ta-max，不动页面高度，锁不住。
+  window.addEventListener('resize', capSoon);
   window.addEventListener('orientationchange', () => setTimeout(() => { clearKbFit(); taCap(); }, 240));
+  if (vv) {
+    vv.addEventListener('resize', capSoon);
+    vv.addEventListener('scroll', capSoon);
+  }
   if (IS_IOS && vv) {
     vv.addEventListener('resize', fitIosKeyboard);
     vv.addEventListener('scroll', fitIosKeyboard);
@@ -2941,7 +2970,7 @@ function diagFlush(beacon) {
       cb, cgap, tray: trayOn ? 1 : 0
     });
     // 「多一片白」的两种形态：整页比屏幕矮 / 输入栏没贴到底，都强制上报
-    if (Math.abs(gap) > 40 || cgap > 40) {
+    if (Math.abs(gap) > 40 || cgap > 40 || (cb && cb > lh + 2)) {
       diag('bad', {
         tag, gap, cgap, lh, vh, ah: Math.round(r.height), ab: Math.round(r.bottom), cb, tray: trayOn ? 1 : 0
       });
