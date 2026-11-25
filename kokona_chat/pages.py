@@ -2804,7 +2804,7 @@ const DIAG = { on: false, verbose: false, sid: '', q: [], timer: null, last: {} 
 
 // 触摸设备只上报真问题（报错、布局错位），不再把每次视口变化都写服务器；
 // 要完整轨迹就在地址后加 ?diag=1
-const DIAG_ALWAYS = { err: 1, rej: 1, bad: 1, probe: 1 };
+const DIAG_ALWAYS = { err: 1, rej: 1, bad: 1, probe: 1, dead: 1 };
 
 function diagRect(sel) {
   const el = document.querySelector(sel);
@@ -2876,10 +2876,11 @@ function diagFlush(beacon) {
   await loadFriends();
   await loadAnns();
   // ---- 视口 / 键盘 ----
-  // 安卓（含 WebView、adjustResize）：键盘一弹布局视口就变矮，`.app{position:fixed;inset:0}`
-  // 会自动跟着缩，**这里一行高度都不写**。之前写过 --app-h，一旦把加载瞬间的中间值写成 px，
-  // 它就锁死了：输入栏停在半空、下面多一片白，刷新一次中一次、不刷新不再变——就是这个。
-  // iOS：键盘盖上来但布局视口不动，才在「有输入框聚焦」期间临时缩一下，失焦立刻还原。
+  // 正常情况下高度全交给 CSS（.app{top:0;bottom:0}），JS 一个字都不写。
+  // 但实测（Via 全屏 + 键盘，292×356 手表）浏览器会把整个视口报成 0：
+  //   lh=0 vh=0 clientHeight=0 → .app 的 100% 变成 0 → 整页被 overflow 裁没、输入框塌成 0 高，
+  //   表现为「一片白 + 输入框不知道飘到哪 + 打拼音什么都没有」。收起键盘后数值又正常，所以像「只触发一次」。
+  // 对策：读到 0 时沿用上一次正常高度顶上，等浏览器报出真值再交回 CSS；聚焦期间持续对表。
   const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const vv = window.visualViewport;
@@ -2888,6 +2889,33 @@ function diagFlush(beacon) {
   let geomTimer = 0;
   let probeN = 0;
   let fitTick = 0;
+  let deadFix = false;
+  let lastGoodH = Math.round(window.innerHeight || 0);
+
+  // 视口被报成 0 时的兜底：不让布局塌掉
+  function deadGuard() {
+    const lh = Math.round(window.innerHeight || 0);
+    const vh = Math.round((vv ? vv.height : lh) || 0);
+    if (lh > 80) lastGoodH = lh;
+    const dead = lh < 80 || vh < 80;
+    if (dead) {
+      if (kbFit) clearKbFit();          // 视口都没了，iOS 那套也别算
+      if (lastGoodH > 80) {
+        if (!deadFix) diag('dead', { on: 1, lh, vh, lastGoodH });
+        deadFix = true;
+        root.style.setProperty('--app-h', lastGoodH + 'px');
+        root.style.setProperty('--vv-top', '0px');
+      }
+      return true;
+    }
+    if (deadFix && !kbFit) {
+      deadFix = false;
+      diag('dead', { on: 0, lh, vh, lastGoodH });
+      root.style.removeProperty('--app-h');
+      root.style.removeProperty('--vv-top');
+    }
+    return false;
+  }
   function clearKbFit() {
     if (!kbFit) return;
     kbFit = false;
@@ -2907,12 +2935,18 @@ function diagFlush(beacon) {
     root.style.setProperty('--vv-top', Math.round(vv.offsetTop || 0) + 'px');
     geomSoon('ios-fit');
   }
+  function tick() {
+    deadGuard();
+    if (IS_IOS) fitIosKeyboard();
+    taCap();
+  }
   // 输入框高度上限：正常给 4 行，键盘顶上来把可视区压到一百多像素时按剩余空间收
   // （手表的真实数据：屏 292×356，键盘一弹 vh 只有 137，头 55，4 行 104 必然被裁掉）
   function taCap() {
     const ta = $('#input');
     if (!ta) return;
-    const vh = Math.round((vv ? vv.height : window.innerHeight) || 0);
+    let vh = Math.round((vv ? vv.height : window.innerHeight) || 0);
+    if (vh < 80) vh = lastGoodH;   // 浏览器报 0 时按上次正常高度算，别把框算成 0
     // 太矮时把聊天头压扁，肉眼能多出一行
     document.body.classList.toggle('kb-tight', vh > 0 && vh < 240);
     const cs = getComputedStyle(ta);
@@ -2941,9 +2975,12 @@ function diagFlush(beacon) {
   window.addEventListener('resize', capSoon);
   window.addEventListener('orientationchange', () => setTimeout(() => { clearKbFit(); taCap(); }, 240));
   if (vv) {
-    vv.addEventListener('resize', () => { capSoon(); geomSoon('kb-resize'); });
-    vv.addEventListener('scroll', () => { capSoon(); geomSoon('kb-scroll'); });
+    vv.addEventListener('resize', () => { deadGuard(); capSoon(); geomSoon('kb-resize'); });
+    vv.addEventListener('scroll', () => { deadGuard(); capSoon(); geomSoon('kb-scroll'); });
   }
+  window.addEventListener('resize', () => { deadGuard(); capSoon(); });
+  // 兜底对表：浏览器把视口报成 0 后可能再也不发事件
+  setInterval(() => { if (!document.hidden) deadGuard(); }, 700);
   if (IS_IOS && vv) {
     vv.addEventListener('resize', fitIosKeyboard);
     vv.addEventListener('scroll', fitIosKeyboard);
@@ -3075,6 +3112,7 @@ function diagFlush(beacon) {
       clearInterval(fitTick);
       fitTick = 0;
       clearKbFit();
+      setTimeout(() => { deadGuard(); taCap(); }, 260);
     });
   }
   const stInput = $('#st-file');
