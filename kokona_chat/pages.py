@@ -60,7 +60,7 @@ a{color:var(--brand-d);text-decoration:none}
   border:1px solid #ffe082}
 
 /* ---------- 主界面 ---------- */
-.app{display:grid;grid-template-columns:340px 1fr;height:100dvh;overflow:hidden}
+.app{display:grid;grid-template-columns:340px 1fr;height:100vh;height:100dvh;overflow:hidden}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
 .side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
 .me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
@@ -86,16 +86,18 @@ a{color:var(--brand-d);text-decoration:none}
 .badge{position:absolute;left:46px;top:4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
   background:var(--danger);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
 
-.main{display:flex;flex-direction:column;min-width:0;background:var(--bg);position:relative}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg);position:relative}
+/* 聊天区必须是纵向弹性容器：缺这条时 msgs 的 flex:1 失效，输入框会被顶到屏幕中间 */
+.chat-view{display:flex;flex-direction:column;flex:1;min-height:0;height:100%}
 .chat-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);
-  border-bottom:1px solid var(--line);padding-top:calc(10px + env(safe-area-inset-top))}
+  border-bottom:1px solid var(--line);padding-top:calc(10px + env(safe-area-inset-top));flex:0 0 auto}
 .chat-title{flex:1;text-align:center;font-weight:600;font-size:16px;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 .icon-btn{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;
   font-size:20px;color:var(--text);flex:0 0 auto}
 .icon-btn:active{background:#eee}
 .back{font-size:26px;line-height:1}
-.msgs{flex:1;overflow-y:auto;padding:14px 12px 6px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.msgs{flex:1;min-height:0;overflow-y:auto;padding:14px 12px 6px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .day-sep{text-align:center;margin:12px 0 10px}
 .day-sep span{font-size:11px;color:var(--sub);background:rgba(0,0,0,.04);padding:2px 8px;border-radius:6px}
 .row{display:flex;margin-bottom:12px;align-items:flex-start;gap:8px}
@@ -107,7 +109,7 @@ a{color:var(--brand-d);text-decoration:none}
 .b-time{font-size:10px;color:var(--sub);margin-top:3px;text-align:right}
 .sys{text-align:center;font-size:12px;color:var(--sub);margin:10px 0}
 .composer{display:flex;gap:8px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);
-  align-items:flex-end;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+  align-items:flex-end;flex:0 0 auto;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 .composer textarea{flex:1;resize:none;max-height:120px;min-height:40px;padding:9px 12px;border-radius:9px;
   border:1px solid var(--line);background:var(--soft);outline:none;line-height:1.4;overflow-y:auto}
 .composer textarea:focus{border-color:var(--brand);background:#fff}
@@ -115,7 +117,7 @@ a{color:var(--brand-d);text-decoration:none}
 .send-btn:active{background:var(--brand-d)}
 
 /* ---------- 面板（通讯录等） ---------- */
-.panel{flex:1;overflow-y:auto;display:flex;flex-direction:column;overscroll-behavior:contain;background:var(--bg)}
+.panel{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;overscroll-behavior:contain;background:var(--bg)}
 .panel-head{display:none;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);
   border-bottom:1px solid var(--line);padding-top:calc(10px + env(safe-area-inset-top))}
 .panel-head b{flex:1;text-align:center;font-size:16px;font-weight:600}
@@ -178,6 +180,35 @@ a{color:var(--brand-d);text-decoration:none}
 .ann-bubble b{display:block;font-size:14px;margin-bottom:4px}
 .ann-bubble p{margin:0 0 10px;font-size:13px;color:#555;white-space:pre-wrap;max-height:40vh;overflow:auto}
 .ann-bubble .btn{padding:8px;font-size:14px;border-radius:9px}
+
+/* ---------- 设置页 ---------- */
+.set-hero{display:flex;align-items:center;gap:14px;padding:18px 16px;background:var(--panel);
+  border-radius:14px;margin-bottom:14px}
+.set-av{width:64px;height:64px;border-radius:50%;object-fit:cover;flex:0 0 auto;background:#e4ece6;
+  border:1px solid rgba(0,0,0,.06)}
+.set-hero-txt{flex:1;min-width:0}
+.set-name{font-size:18px;font-weight:700;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-user{font-size:12px;color:var(--sub);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ghost-btn{flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1px solid var(--line);
+  background:var(--soft);font-size:13px;color:var(--brand-d);font-weight:500}
+.ghost-btn:active{background:#eef7f1}
+.set-group{background:var(--panel);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.set-group .item{border-bottom:1px solid var(--line)}
+.set-group .item:last-child{border-bottom:0}
+.set-note{padding:0 4px 8px;font-size:12px;color:var(--sub)}
+
+/* ---------- 头像裁剪 ---------- */
+.crop-box{position:relative;width:100%;max-width:300px;aspect-ratio:1/1;margin:16px auto 10px;
+  border-radius:14px;overflow:hidden;background:#111;touch-action:none;cursor:grab}
+.crop-box:active{cursor:grabbing}
+.crop-box img{position:absolute;left:50%;top:50%;transform-origin:center;will-change:transform;
+  -webkit-user-drag:none;user-select:none;pointer-events:none}
+.crop-mask{position:absolute;inset:0;border-radius:14px;pointer-events:none;
+  box-shadow:0 0 0 999px rgba(0,0,0,.55) inset;border:2px solid rgba(255,255,255,.75)}
+.crop-ring{position:absolute;left:50%;top:50%;width:78%;aspect-ratio:1/1;transform:translate(-50%,-50%);
+  border:2px dashed rgba(255,255,255,.85);border-radius:50%;pointer-events:none}
+.crop-ctrl{display:flex;align-items:center;gap:10px;padding:0 18px 12px;font-size:12px;color:var(--sub)}
+.crop-ctrl input[type=range]{flex:1;accent-color:var(--brand)}
 
 /* ---------- 移动端 ---------- */
 @media(max-width:760px){
@@ -600,17 +631,21 @@ function fmtDay(ts) {
   return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
 }
 
-/** 自己没设头像时用站点头像，别人没设就用名字首字。 */
+/** 头像地址：av:xxx 走服务端头像接口；兼容老的 http(s) 链接；没设返回空串。 */
 function avatarSrc(u) {
-  if (u && u.avatar) return u.avatar;
-  if (u && S.me && Number(u.id) === Number(S.me.id)) return ICON;
+  const a = String((u && u.avatar) || '');
+  if (a.indexOf('av:') === 0) return BASE + '/avatar/' + encodeURIComponent(a.slice(3));
+  if (/^https?:\/\//.test(a)) return a;
   return '';
 }
 
+/** 自己没设头像时用站点头像，别人没设就用名字首字。 */
 function avatar(u, cls) {
   cls = cls || '';
   const src = avatarSrc(u);
   if (src) return '<div class="avatar ' + cls + '"><img src="' + esc(src) + '" alt=""></div>';
+  const self = u && S.me && Number(u.id) === Number(S.me.id);
+  if (self) return '<div class="avatar ' + cls + '"><img src="' + esc(ICON) + '" alt=""></div>';
   const name = (u && (u.display_name || u.username)) || '?';
   return '<div class="avatar ' + cls + '">' + esc(String(name).slice(0, 1)) + '</div>';
 }
@@ -628,9 +663,9 @@ function renderDrawer() {
   $('#drawer-id').textContent = '@' + me.username + (me.is_admin ? ' · 管理员' : '');
 
   const items = [
+    ['open-settings', '⚙️', '设置'],
     ['drawer-contacts', '👥', '通讯录'],
     ['drawer-ann', '📢', '公告板'],
-    ['drawer-password', '🔒', '修改密码'],
     ['drawer-reload', '🔄', '刷新会话列表'],
   ];
   if (me.is_admin) items.push(['drawer-admin', '🛠️', '管理后台']);
@@ -686,7 +721,9 @@ function renderConvs() {
     const last = c.last ? String(c.last.body || '').slice(0, 40) : (c.kind === 'group' ? '群聊已创建' : '开始聊天吧');
     const av = c.kind === 'direct'
       ? avatar(c.peer)
-      : '<div class="avatar g">' + esc(String(c.title || '群').slice(0, 1)) + '</div>';
+      : (c.kind === 'pkn'
+        ? '<div class="avatar"><img src="' + esc(ICON) + '" alt=""></div>'
+        : '<div class="avatar g">' + esc(String(c.title || '群').slice(0, 1)) + '</div>');
     const badge = c.unread > 0 ? '<span class="badge">' + (c.unread > 99 ? '99+' : c.unread) + '</span>' : '';
     return '<div class="conv' + (S.cur && S.cur.id === c.id ? ' on' : '') + '" data-act="open-conv" data-id="' + c.id + '">'
       + av + '<div class="conv-body"><div class="conv-top"><span class="conv-name">' + esc(c.title)
@@ -1025,23 +1062,176 @@ function chatSetting() {
 
 /* ---------------- 表单类弹层 ---------------- */
 
-function editProfile() {
-  openSheet('编辑资料',
-    '<div class="mini-form">'
-    + '<label>显示名</label>'
-    + '<input id="dn-in" value="' + esc(S.me.display_name) + '">'
-    + '<label>头像链接（可选）</label>'
-    + '<input id="av-in" value="' + esc(S.me.avatar) + '" placeholder="https://…">'
-    + '<button class="btn" data-act="save-profile">保存</button></div>', '');
+/** 个人资料 / 账号设置：所有登录用户都有这一页。 */
+function openSettings() {
+  S.view = 'settings';
+  const me = S.me;
+  const isSub = Number(me.is_sub) === 1;
+  const tag = me.is_admin ? ' · 管理员' : (isSub ? ' · 子账号' : '');
+  showPanel('设置',
+    '<div class="set-hero">'
+    + '<img class="set-av" id="set-av" src="' + esc(avatarSrc(me) || ICON) + '" alt="">'
+    + '<div class="set-hero-txt"><div class="set-name">' + esc(displayName(me)) + '</div>'
+    + '<div class="set-user">@' + esc(me.username) + esc(tag) + '</div></div>'
+    + '<button class="ghost-btn" data-act="pick-avatar">换头像</button></div>'
+    + '<div class="set-group">'
+    + '<div class="item" data-act="edit-name"><div class="txt"><div class="t1">显示名</div>'
+    + '<div class="t2">' + esc(displayName(me)) + '</div></div><span class="arrow">›</span></div>'
+    + '<div class="item"><div class="txt"><div class="t1">账号</div><div class="t2">@'
+    + esc(me.username) + '</div></div></div>'
+    + (me.email ? '<div class="item"><div class="txt"><div class="t1">邮箱</div><div class="t2">'
+      + esc(me.email) + '</div></div></div>' : '')
+    + '</div>'
+    + '<div class="set-group">'
+    + '<div class="item" data-act="password"><div class="txt"><div class="t1">修改密码</div></div>'
+    + '<span class="arrow">›</span></div>'
+    + '<div class="item" data-act="drawer-ann"><div class="txt"><div class="t1">公告板</div></div>'
+    + '<span class="arrow">›</span></div>'
+    + (me.is_admin ? '<div class="item" data-act="drawer-admin"><div class="txt"><div class="t1">管理后台</div>'
+      + '</div><span class="arrow">›</span></div>' : '')
+    + '</div>'
+    + '<div class="set-group"><div class="item" data-act="logout"><div class="txt">'
+    + '<div class="t1" style="color:#fa5151">退出登录</div></div></div></div>'
+    + '<div class="set-note">头像会被裁成方形并转成 webp 存到服务器，最大 400KB。</div>'
+    + '<input type="file" id="av-file" accept="image/*" hidden>',
+    '');
+  const f = $('#av-file');
+  if (f) f.addEventListener('change', onAvatarPicked);
+}
+
+/** 把服务端返回的最新用户信息同步到界面各处。 */
+function applyMe(u) {
+  if (!u) return;
+  S.me = Object.assign(S.me, u);
+  const av = avatarSrc(S.me) || ICON;
+  const a = $('#me-av');
+  if (a) a.src = av;
+  const n = $('#me-name');
+  if (n) n.textContent = displayName(S.me);
+  const sa = $('#set-av');
+  if (sa) sa.src = av;
+  renderDrawer();
+}
+
+function editName() {
+  openSheet('修改显示名',
+    '<div class="mini-form"><label>显示名</label>'
+    + '<input id="dn-in" maxlength="30" value="' + esc(displayName(S.me)) + '" placeholder="别人看到的名字">'
+    + '<button class="btn" data-act="save-name">保存</button></div>', '');
 }
 
 function changePassword() {
   openSheet('修改密码',
     '<div class="mini-form">'
-    + '<input id="old-pw" type="password" placeholder="原密码">'
-    + '<input id="new-pw" type="password" placeholder="新密码（≥6 位）">'
+    + '<input id="old-pw" type="password" placeholder="原密码" autocomplete="current-password">'
+    + '<input id="new-pw" type="password" placeholder="新密码（≥6 位）" autocomplete="new-password">'
+    + '<input id="new-pw2" type="password" placeholder="再输一次新密码" autocomplete="new-password">'
     + '<button class="btn" data-act="save-pw">确定修改</button></div>', '');
 }
+
+/* ---------------- 头像：选图 → 拖动/缩放裁剪 → 转 webp 上传 ---------------- */
+
+const CROP = { img: null, zoom: 1, x: 0, y: 0, base: 1, w: 0, h: 0, box: 0 };
+
+function onAvatarPicked(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { toast('请选择图片文件'); return; }
+  if (file.size > 8 * 1024 * 1024) { toast('图片太大（8MB 以内）'); return; }
+  const reader = new FileReader();
+  reader.onload = () => openCropper(String(reader.result || ''));
+  reader.onerror = () => toast('读取图片失败');
+  reader.readAsDataURL(file);
+}
+
+function cropApply() {
+  if (!CROP.img) return;
+  const B = CROP.box;
+  const s = CROP.base * CROP.zoom;
+  const dw = CROP.w * s, dh = CROP.h * s;
+  const maxX = Math.max(0, (dw - B) / 2), maxY = Math.max(0, (dh - B) / 2);
+  CROP.x = Math.min(maxX, Math.max(-maxX, CROP.x));
+  CROP.y = Math.min(maxY, Math.max(-maxY, CROP.y));
+  CROP.img.style.width = dw + 'px';
+  CROP.img.style.height = dh + 'px';
+  CROP.img.style.transform = 'translate(-50%,-50%) translate(' + CROP.x + 'px,' + CROP.y + 'px)';
+}
+
+function openCropper(src) {
+  openSheet('调整头像',
+    '<div class="crop-box" id="crop-box">'
+    + '<img id="crop-img" alt="">'
+    + '<div class="crop-mask"></div><div class="crop-ring"></div></div>'
+    + '<div class="crop-ctrl"><span>缩放</span>'
+    + '<input type="range" id="crop-zoom" min="1" max="3" step="0.01" value="1"></div>',
+    '<button class="btn" data-act="crop-save">保存头像</button>');
+
+  const box = $('#crop-box'), img = $('#crop-img'), range = $('#crop-zoom');
+  if (!box || !img || !range) return;
+
+  CROP.img = img; CROP.zoom = 1; CROP.x = 0; CROP.y = 0;
+
+  const start = () => {
+    CROP.w = img.naturalWidth || 1;
+    CROP.h = img.naturalHeight || 1;
+    CROP.box = box.clientWidth || 240;
+    CROP.base = Math.max(CROP.box / CROP.w, CROP.box / CROP.h);
+    CROP.x = 0; CROP.y = 0;
+    cropApply();
+  };
+  img.onload = start;
+  img.src = src;
+  if (img.complete && img.naturalWidth) start();
+
+  range.addEventListener('input', () => { CROP.zoom = Number(range.value) || 1; cropApply(); });
+
+  let drag = null;
+  box.addEventListener('pointerdown', (ev) => {
+    drag = { x: ev.clientX, y: ev.clientY, ox: CROP.x, oy: CROP.y };
+    try { box.setPointerCapture(ev.pointerId); } catch (err) {}
+  });
+  box.addEventListener('pointermove', (ev) => {
+    if (!drag) return;
+    ev.preventDefault();
+    CROP.x = drag.ox + (ev.clientX - drag.x);
+    CROP.y = drag.oy + (ev.clientY - drag.y);
+    cropApply();
+  });
+  const stop = () => { drag = null; };
+  box.addEventListener('pointerup', stop);
+  box.addEventListener('pointercancel', stop);
+  box.addEventListener('pointerleave', stop);
+}
+
+async function saveCrop() {
+  const img = CROP.img;
+  if (!img || !CROP.box) { toast('图片还没准备好'); return; }
+  const s = CROP.base * CROP.zoom;
+  const side = CROP.box / s;                       // 裁剪框对应的原图边长
+  const sx = CROP.w / 2 - CROP.x / s - side / 2;
+  const sy = CROP.h / 2 - CROP.y / s - side / 2;
+  const out = 256;
+  const cv = document.createElement('canvas');
+  cv.width = out; cv.height = out;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, sx, sy, side, side, 0, 0, out, out);
+  let data = cv.toDataURL('image/webp', 0.88);
+  if (data.indexOf('data:image/webp') !== 0) data = cv.toDataURL('image/png');
+  try {
+    const d = await api('/api/avatar', 'POST', { data: data });
+    applyMe(d.user);
+    document.querySelectorAll('.mask').forEach((m) => m.remove());
+    toast('头像已更新');
+    if (S.view === 'settings') openSettings();
+  } catch (err) {
+    toast('上传失败：' + (err.message || '未知错误'));
+  }
+}
+
+function editProfile() { openSettings(); }
 
 async function newGroup() {
   await loadFriends();
@@ -1066,10 +1256,15 @@ document.addEventListener('click', async (e) => {
     if (act === 'drawer-open') { openDrawer(); }
     else if (act === 'drawer-contacts') { closeDrawer(); await loadSubs(); showContacts(); }
     else if (act === 'drawer-ann') { closeDrawer(); openAnnList(); }
+    else if (act === 'open-settings') { closeDrawer(); openSettings(); }
     else if (act === 'drawer-password') { closeDrawer(); changePassword(); }
     else if (act === 'drawer-reload') { closeDrawer(); await loadConvs(); toast('已刷新'); }
     else if (act === 'drawer-admin') { location.href = BASE + '/admin'; }
-    else if (act === 'drawer-profile') { closeDrawer(); editProfile(); }
+    else if (act === 'drawer-profile') { closeDrawer(); openSettings(); }
+    else if (act === 'pick-avatar') { const f = $('#av-file'); if (f) f.click(); }
+    else if (act === 'crop-save') { await saveCrop(); }
+    else if (act === 'edit-name') { editName(); }
+    else if (act === 'password') { changePassword(); }
     else if (act === 'open-conv') { openConv(Number(id)); }
     else if (act === 'back') { showList(); }
     else if (act === 'send') { sendMsg(); }
@@ -1164,20 +1359,20 @@ document.addEventListener('click', async (e) => {
       await loadAnns();
       setTimeout(popAnnouncement, 120);
     }
-    else if (act === 'save-profile') {
-      const d = await api('/api/profile', 'POST', {
-        display_name: $('#dn-in').value.trim(), avatar: $('#av-in').value.trim()
-      });
-      S.me = Object.assign(S.me, d.user);
-      $('#me-av').src = avatarSrc(S.me) || ICON;
-      $('#me-name').textContent = displayName(S.me);
-      renderDrawer();
-      toast('已保存');
+    else if (act === 'save-name') {
+      const v = $('#dn-in').value.trim();
+      if (!v) { toast('显示名不能为空'); return; }
+      const d = await api('/api/profile', 'POST', { display_name: v });
+      applyMe(d.user);
       document.querySelectorAll('.mask').forEach((m) => m.remove());
+      toast('显示名已保存');
+      if (S.view === 'settings') openSettings();
     }
     else if (act === 'save-pw') {
+      const n1 = $('#new-pw').value, n2 = $('#new-pw2').value;
+      if (n1 !== n2) { toast('两次输入的新密码不一致'); return; }
       await api('/api/password', 'POST', {
-        old_password: $('#old-pw').value, new_password: $('#new-pw').value
+        old_password: $('#old-pw').value, new_password: n1
       });
       toast('密码已修改');
       document.querySelectorAll('.mask').forEach((m) => m.remove());
@@ -1243,6 +1438,7 @@ def app_page(user, store=None, hub=None, base=None):
         "username": user["username"],
         "display_name": user["display_name"] or user["username"],
         "avatar": user["avatar"] or "",
+        "email": user["email"] or "",
         "role": user["role"],
         "is_admin": user["role"] == "admin",
         "is_sub": int(user["is_sub"] or 0),

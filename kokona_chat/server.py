@@ -3,9 +3,11 @@
 零第三方依赖，只用标准库。设计目标是能在低配单核 VPS 上跑住。
 """
 
+import base64
 import json
 import os
 import re
+import secrets
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,6 +18,9 @@ from . import auth, config, db, hub, mailer, pages, store, wskit
 HUB = hub.Hub()
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+# 用户头像单独放数据目录，跟只读的代码目录分开
+AVATAR_DIR = os.path.join(config.DATA_DIR, "avatars")
+MAX_AVATAR_BYTES = 400 * 1024
 STATIC_MIME = {
     ".png": "image/png",
     ".ico": "image/x-icon",
@@ -136,11 +141,70 @@ def _full_user(c, user):
 @route("POST", "/api/profile")
 def api_profile(c):
     user = c.need_login()
-    display = str(c.arg("display_name", user["display_name"]))[:30]
-    avatar = str(c.arg("avatar", user["avatar"]))[:200]
+    display = str(c.arg("display_name", user["display_name"]) or "").strip()[:30]
+    if not display:
+        raise ApiError("显示名不能为空")
+    avatar = str(c.arg("avatar", user["avatar"]) or "")[:200]
+    if avatar and not (avatar.startswith("av:") and "/" not in avatar[3:] and ".." not in avatar) \
+            and not re.match(r"^https?://", avatar):
+        raise ApiError("头像地址不合法")
     db.run("UPDATE users SET display_name = ?, avatar = ? WHERE id = ?", (display, avatar, user["id"]))
+    if avatar == "":
+        _drop_avatar_file(str(user["avatar"] or ""))
     fresh = db.qone("SELECT * FROM users WHERE id = ?", (user["id"],))
     return ok(user=_full_user(c, fresh))
+
+
+def _drop_avatar_file(stored):
+    """删掉被替换下来的头像文件，别把磁盘堆满。"""
+    if not stored.startswith("av:"):
+        return
+    name = stored[3:]
+    if name == "" or "/" in name or ".." in name:
+        return
+    try:
+        os.remove(os.path.join(AVATAR_DIR, name))
+    except OSError:
+        pass
+
+
+@route("POST", "/api/avatar")
+def api_avatar(c):
+    """接收前端裁好的方图（尽量 webp），落盘后把头像指过去。
+
+    浏览器不给 webp 编码时允许退化成 png，保证老 Safari 也能换头像。
+    """
+    user = c.need_login()
+    raw = str(c.arg("data") or "")
+    hit = re.match(r"^data:image/(webp|png);base64,(.+)$", raw, re.S)
+    if not hit:
+        raise ApiError("只接受 webp / png 图片")
+    kind, blob = hit.group(1), hit.group(2)
+    try:
+        data = base64.b64decode(blob, validate=True)
+    except Exception:
+        raise ApiError("图片数据损坏")
+    if len(data) < 64:
+        raise ApiError("图片太小")
+    if len(data) > MAX_AVATAR_BYTES:
+        raise ApiError("图片太大（上限 400KB）")
+    if kind == "webp" and (data[:4] != b"RIFF" or data[8:12] != b"WEBP"):
+        raise ApiError("不是有效的 webp")
+    if kind == "png" and data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ApiError("不是有效的 png")
+
+    os.makedirs(AVATAR_DIR, exist_ok=True)
+    name = "u%d-%s.%s" % (user["id"], secrets.token_hex(5), kind)
+    with open(os.path.join(AVATAR_DIR, name), "wb") as fh:
+        fh.write(data)
+
+    old = str(user["avatar"] or "")
+    db.run("UPDATE users SET avatar = ? WHERE id = ?", ("av:" + name, user["id"]))
+    if old != "av:" + name:
+        _drop_avatar_file(old)
+
+    fresh = db.qone("SELECT * FROM users WHERE id = ?", (user["id"],))
+    return ok(user=_full_user(c, fresh), url="av:" + name)
 
 
 @route("POST", "/api/password")
@@ -836,6 +900,30 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
+    def _avatar(self, name):
+        if "/" in name or ".." in name or name == "":
+            self._send_headers(404, "text/plain; charset=utf-8", 0)
+            return
+        full = os.path.join(AVATAR_DIR, name)
+        if not os.path.isfile(full):
+            self._send_headers(404, "text/plain; charset=utf-8", 0)
+            return
+        try:
+            with open(full, "rb") as fh:
+                data = fh.read()
+        except OSError:
+            self._send_headers(500, "text/plain; charset=utf-8", 0)
+            return
+        ext = os.path.splitext(name)[1].lower()
+        self._send_headers(
+            200, STATIC_MIME.get(ext, "application/octet-stream"), len(data),
+            [("Cache-Control", "public, max-age=86400")],
+        )
+        try:
+            self.wfile.write(data)
+        except Exception:
+            pass
+
     def _redirect(self, location, code=302):
         self.send_response(code)
         self.send_header("Location", location)
@@ -899,6 +987,11 @@ class Handler(BaseHTTPRequestHandler):
             # 静态资源
             if path.startswith("/static/"):
                 self._static(path)
+                return
+
+            # 用户头像（运行时写入数据目录）
+            if path.startswith("/avatar/"):
+                self._avatar(path[len("/avatar/"):])
                 return
 
             # API

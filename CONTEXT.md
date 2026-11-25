@@ -34,6 +34,22 @@ kokonachat/
 4. **子账号（`is_sub=1`）** 只能和主账号聊，不能加好友 / 建群 / 建子账号。
 5. **legacy 频道 1/2/3** 的 id 永远占位，只有管理员能进。
 6. 主管理员 `akizukikokona` 不可被封禁。
+7. **头像不走外链**：前端用 canvas 裁成方形、导出 webp（256×256），POST `/api/avatar`；
+   文件落在 `data/avatars/`，`users.avatar` 存 `av:<文件名>`。渲染时前端拼 `BASE + '/avatar/' + 文件名`。
+   没有头像时：自己 → 站点头像 `static/icon.png`，别人 → 名字首字。
+8. **PKN 会接管「只有自己」的 legacy 会话**（`store.get_or_create_pkn`），
+   所以旧「频道一」就是账号的专属 WSS 聊天，不会再额外建一条导致列表出现两个。
+
+## 界面结构（别改回去）
+
+- `.app` 是 `grid`（桌面 340px + 1fr），`.main` 是纵向 flex。
+- **`.chat-view` 必须是 `display:flex;flex-direction:column;flex:1;min-height:0`**。
+  少了这条，`.msgs` 的 `flex:1` 不生效，消息少的时候输入框会被顶到屏幕中间。
+- 移动端靠 `body.chat-open` / `body.panel-open` 切视图，`sidebar` 与 `main` 互斥显示；
+  **不要再加底部 tabbar**——它挂在 sidebar 里，进面板时会被一起隐藏，回到列表就没入口了。
+- 抽屉（`.drawer`）从左侧滑出，顶部是个人资料卡片，下面是「设置 / 通讯录 / 公告板 / 刷新 / 管理后台」。
+  普通用户的「设置」页里有：换头像、改显示名、改密码、公告板、退出登录。
+
 
 ## 鉴权与挂载
 

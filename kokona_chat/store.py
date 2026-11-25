@@ -167,6 +167,9 @@ def list_conversations(user_id):
             (conv["id"],),
         )
         item["last"] = _row(last)
+        # 空的旧频道只是占位，别在列表里占位子
+        if conv["kind"] == "legacy" and last is None:
+            continue
         if conv["kind"] == "direct":
             peer_id = _peer_of_direct(conv, user_id)
             peer = db.qone("SELECT * FROM users WHERE id = ?", (peer_id,)) if peer_id else None
@@ -434,6 +437,24 @@ def get_or_create_pkn(user_id):
     hit = db.qone("SELECT id FROM conversations WHERE dm_key = ?", (key,))
     if hit is not None:
         return int(hit["id"])
+
+    # 老账号可能已经有一条「只有自己」的旧频道（频道一）。
+    # 那本来就是他的专属聊天，直接接管，别再新建一条让人看到两个。
+    adopt = db.qone(
+        "SELECT c.id FROM conversations c "
+        "JOIN conversation_members m ON m.conv_id = c.id "
+        "WHERE m.user_id = ? AND c.kind = 'legacy' AND c.dm_key IS NULL "
+        "  AND (SELECT COUNT(*) FROM conversation_members x WHERE x.conv_id = c.id) = 1 "
+        "ORDER BY c.id LIMIT 1",
+        (int(user_id),),
+    )
+    if adopt is not None:
+        cid = int(adopt["id"])
+        db.run(
+            "UPDATE conversations SET kind = 'pkn', dm_key = ?, title = ? WHERE id = ?",
+            (key, PKN_TITLE, cid),
+        )
+        return cid
 
     t = db.now()
     cur = db.run(
