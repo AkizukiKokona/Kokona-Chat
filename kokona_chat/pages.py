@@ -2804,7 +2804,7 @@ const DIAG = { on: false, verbose: false, sid: '', q: [], timer: null, last: {} 
 
 // 触摸设备只上报真问题（报错、布局错位），不再把每次视口变化都写服务器；
 // 要完整轨迹就在地址后加 ?diag=1
-const DIAG_ALWAYS = { err: 1, rej: 1, bad: 1 };
+const DIAG_ALWAYS = { err: 1, rej: 1, bad: 1, probe: 1 };
 
 function diagRect(sel) {
   const el = document.querySelector(sel);
@@ -2886,6 +2886,7 @@ function diagFlush(beacon) {
   const root = document.documentElement;
   let kbFit = false;
   let geomTimer = 0;
+  let probeN = 0;
   let fitTick = 0;
   function clearKbFit() {
     if (!kbFit) return;
@@ -2971,8 +2972,26 @@ function diagFlush(beacon) {
     const ibg = cb ? Math.round(ab - cb) : 0;
     const tray = document.querySelector('#tray');
     const trayOn = !!(tray && tray.offsetHeight > 0);
+    const mn = document.querySelector('.main');
+    const cv = document.querySelector('.chat-view');
+    const mnH = mn ? Math.round(mn.getBoundingClientRect().height) : 0;
+    const cvH = cv ? Math.round(cv.getBoundingClientRect().height) : 0;
+    // JS 到底有没有写过高度：'-' 说明完全交给 CSS，说明白高度不是我们写的
+    const av = getComputedStyle(root).getPropertyValue('--app-h').trim() || '-';
+    // 前 3 次无论对错都上报，才能知道「对的」长什么样，和错的对比
+    if (probeN < 5 && tag !== 't1' && tag !== 't2') {
+      probeN += 1;
+      diag('probe', {
+        n: probeN, tag, lh, vh, vtop, vbot, av, kf: kbFit ? 1 : 0,
+        ah, ab, cb, mnH, cvH, abg, cbg, ibg,
+        sc: vv ? Number((vv.scale || 1).toFixed(2)) : 0,
+        ae: (document.activeElement && (document.activeElement.id || document.activeElement.tagName)) || '',
+        ta: (() => { const t = document.querySelector('#input'); if (!t) return null;
+          const b = t.getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom), Math.round(b.height), t.value.length]; })()
+      });
+    }
     diag('geom', {
-      tag, lh, vh, vtop, vbot, ah, ab, cb, abg, cbg, ibg,
+      tag, lh, vh, vtop, vbot, ah, ab, cb, abg, cbg, ibg, mnH, cvH, av,
       sc: vv ? Number((vv.scale || 1).toFixed(2)) : 0,
       dh: document.documentElement.clientHeight, oh: window.outerHeight,
       sh: window.screen ? screen.height : 0, tray: trayOn ? 1 : 0
