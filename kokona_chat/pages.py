@@ -61,8 +61,7 @@ a{color:var(--brand-d);text-decoration:none}
   border:1px solid #ffe082}
 
 /* ---------- 主界面 ---------- */
-.app{position:fixed;left:0;right:0;top:0;display:grid;grid-template-columns:340px 1fr;
-  height:var(--app-h,100dvh);transform:translateY(var(--vv-top,0px));overflow:hidden}
+.app{display:grid;grid-template-columns:340px 1fr;height:100vh;height:100dvh;overflow:hidden}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
 .side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
 .me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
@@ -90,7 +89,8 @@ a{color:var(--brand-d);text-decoration:none}
 
 .main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg);position:relative}
 /* 聊天区必须是纵向弹性容器：缺这条时 msgs 的 flex:1 失效，输入框会被顶到屏幕中间 */
-.chat-view{display:flex;flex-direction:column;flex:1;min-height:0;height:100%}
+.chat-view{display:flex;flex-direction:column;flex:1;min-height:0;height:100%;
+  overflow:hidden;padding-bottom:var(--kb,0px)}
 .chat-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);
   border-bottom:1px solid var(--line);padding-top:calc(10px + env(safe-area-inset-top));flex:0 0 auto}
 .chat-title{flex:1;text-align:center;font-weight:600;font-size:16px;overflow:hidden;
@@ -119,7 +119,7 @@ a{color:var(--brand-d);text-decoration:none}
 .sys{text-align:center;font-size:12px;color:var(--sub);margin:10px 0}
 .composer{display:flex;gap:8px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);
   align-items:flex-end;flex:0 0 auto;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
-.composer textarea{flex:1 1 0;min-width:0;resize:none;max-height:120px;min-height:40px;padding:9px 12px;border-radius:9px;
+.composer textarea{flex:1 1 0;min-width:0;resize:none;max-height:104px;min-height:40px;padding:9px 12px;border-radius:9px;
   border:1px solid var(--line);background:var(--soft);outline:none;line-height:1.4;overflow-y:auto}
 .composer textarea:focus{border-color:var(--brand);background:#fff}
 .send-btn{flex:0 0 auto;padding:0 14px;height:40px;border-radius:9px;background:var(--brand);color:#fff;font-weight:600}
@@ -1789,8 +1789,12 @@ async function saveSticker(mediaId) {
 }
 
 function autoGrow(el) {
+  const MAX = 104;
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  const h = Math.min(el.scrollHeight, MAX);
+  el.style.height = h + 'px';
+  el.style.overflowY = el.scrollHeight > MAX ? 'auto' : 'hidden';
+  if (el.scrollHeight > MAX) el.scrollTop = el.scrollHeight;
 }
 
 async function sendMsg() {
@@ -2768,16 +2772,18 @@ document.addEventListener('visibilitychange', () => {
   // 移动端键盘弹起时，用 visualViewport 的真实高度，让消息列表跟着缩
   const vv = window.visualViewport;
   const root = document.documentElement;
-  // 键盘弹起时 visualViewport 会变矮、还可能整体上滚；高度和 offsetTop 一起跟，
-  // 只改高度会让 .app 停在布局视口顶部，输入栏跑到半空、下面一片白。
+  // 键盘只影响输入区：算出被遮住的高度，给 .chat-view 垫底，
+  // 不再改 .app 高度，避免刷新时读到半截的 vv.height 把整页压扁。
   window.syncViewport = () => {
+    let kb = 0;
     if (vv) {
-      root.style.setProperty('--app-h', Math.round(vv.height) + 'px');
-      root.style.setProperty('--vv-top', Math.round(vv.offsetTop) + 'px');
-    } else {
-      root.style.setProperty('--app-h', window.innerHeight + 'px');
-      root.style.setProperty('--vv-top', '0px');
+      const vh = window.innerHeight;
+      // offsetTop 也算进去：iOS 会把可视视口整体上滚
+      kb = vh - vv.height - (vv.offsetTop || 0);
+      if (!isFinite(kb) || kb < 40) kb = 0;
+      kb = Math.min(kb, Math.round(vh * 0.7));
     }
+    root.style.setProperty('--kb', Math.round(kb) + 'px');
     if (document.body.classList.contains('chat-open')) scrollBottom(true);
   };
   if (vv) {
@@ -2799,6 +2805,9 @@ document.addEventListener('visibilitychange', () => {
       closeTray();
       // 键盘动画结束前 vv.height 可能是中间值，补几次校正
       [80, 260, 560].forEach((d) => setTimeout(() => window.syncViewport && window.syncViewport(), d));
+    });
+    inputEl.addEventListener('blur', () => {
+      setTimeout(() => window.syncViewport && window.syncViewport(), 240);
     });
   }
   const stInput = $('#st-file');

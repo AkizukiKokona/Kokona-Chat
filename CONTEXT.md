@@ -58,9 +58,12 @@ kokonachat/
 - 「设置」页：封面/头像、显示名、WSS 账号、改密码、公告板、退出。
 - 点好友 / 群成员 / 聊天标题 / 消息头像 → 资料卡（`openUserCard`），样式与自己的卡片一致。
   点了头像就不再弹消息时间：`.row[data-ts]` 的 toast 先判 `[data-act]`。
-- `.app` 是 `position:fixed`，高度吃 `--app-h`（visualViewport.height）、纵向偏移吃 `--vv-top`
-  （visualViewport.offsetTop）。**只改高度不改偏移**会让输入栏卡在半空、下面一片白。
-  `window.syncViewport()` 在 vv 的 resize/scroll、窗口 resize、转屏、输入框 focus 后都调一次。
+- `.app` 高度只用 `100dvh`，**不要再用 JS 写整页高度**。启动时读到的 `visualViewport.height`
+  常常是半截值，写进 `--app-h` 会把整页压扁：输入栏停半空、下面一片白、点啥都没反应。
+- 键盘只抬输入区：`syncViewport()` 算 `kb = innerHeight - vv.height - vv.offsetTop`，
+  写进 `--kb`，`.chat-view` 用 `padding-bottom:var(--kb)` 垫高。高度不变，就不会挤压消息列表。
+  在 vv 的 resize/scroll、窗口 resize、转屏、输入框 focus（补 80/260/560ms）和 blur 后各调一次。
+- 输入框最高 104px（`autoGrow` 同步 `max-height`），再多就在框内滚，别让它继续撑高把列表压没。
 - 权限卡片、公告气泡的 `bottom` 要留出输入栏高度（`86px + safe-area`），否则会盖住输入框和发送键。
 - 会话行的按压底色是 `.conv.press`，由 `pointerdown/up` 加删；**不要用 `:active`**，
   移动端会把按下状态黏在那一行，退出聊天后还是深色。
