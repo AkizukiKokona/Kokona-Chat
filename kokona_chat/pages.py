@@ -2934,9 +2934,13 @@ function diagFlush(beacon) {
     const ae = document.activeElement;
     const typing = ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName);
     const lh = window.innerHeight || 0;
-    const vh = Math.round(vv.height || 0);
+    const raw = Math.round(vv.height || 0);
     const zoomed = Math.abs((vv.scale || 1) - 1) > 0.02;
-    if (!typing || zoomed || !vh || vh >= lh - 80) { clearKbFit(); return; }
+    if (!typing || zoomed || !raw || raw >= lh - 80) { clearKbFit(); return; }
+    // 同一个宿主缺陷 iOS 也会中：键盘被减了两次，raw = S - 2k。竖屏键盘最多占屏 45% 左右，
+    // 超过一半就只能是双倍扣减，按 (S + raw) / 2 反推真实可见高度。
+    const kbRatio = (lh - raw) / lh;
+    const vh = kbRatio > 0.5 ? Math.round((lh + raw) / 2) : raw;
     kbFit = true;
     root.style.setProperty('--app-h', vh + 'px');
     root.style.setProperty('--vv-top', Math.round(vv.offsetTop || 0) + 'px');
