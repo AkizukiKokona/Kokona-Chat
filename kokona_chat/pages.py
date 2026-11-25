@@ -72,7 +72,7 @@ a{color:var(--brand-d);text-decoration:none}
 .side-search input{width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--soft);outline:none;font-size:14px}
 .conv-list{flex:1;overflow-y:auto;overscroll-behavior:contain}
 .conv{display:flex;gap:10px;padding:11px 14px;align-items:center;position:relative}
-.conv:active{background:#ececec}
+.conv.press{background:#ececec}
 .conv.on{background:#f4e8d4}
 .avatar{width:44px;height:44px;border-radius:8px;background:#d9c6a8;color:#fff;display:flex;
   align-items:center;justify-content:center;font-weight:600;font-size:16px;flex:0 0 auto;overflow:hidden}
@@ -188,6 +188,11 @@ a{color:var(--brand-d);text-decoration:none}
 .ann-bubble b{display:block;font-size:14px;margin-bottom:4px}
 .ann-bubble p{margin:0 0 10px;font-size:13px;color:#555;white-space:pre-wrap;max-height:40vh;overflow:auto}
 .ann-bubble .btn{padding:8px;font-size:14px;border-radius:9px}
+.push-bubble{left:16px;right:16px;margin:0 auto;bottom:18px}
+.push-acts{display:flex;gap:8px}
+.push-acts .btn{flex:1;padding:9px;font-size:14px;border-radius:9px}
+.push-acts .later{flex:0 0 auto;padding:9px 14px;font-size:14px;border-radius:9px;
+  background:var(--soft);color:var(--sub);border:1px solid var(--line)}
 
 /* ---------- 设置页 ---------- */
 .set-hero{position:relative;overflow:hidden;border-radius:14px;margin-bottom:14px;min-height:140px;
@@ -624,7 +629,7 @@ const COARSE = window.matchMedia && window.matchMedia('(pointer:coarse)').matche
 const ICON = BASE + '/static/icon.png';
 
 const S = {
-  me: ME, convs: [], cur: null, msgs: [],
+  me: ME, convs: [], cur: null, msgs: [], openId: null,
   friends: [], blocks: [], subs: [], subCanCreate: false, anns: [], view: 'chats'
 };
 
@@ -695,7 +700,7 @@ async function refreshPushState() {
 
 async function pushEnable() {
   if (!PUSH.supported) { toast('这个浏览器不支持推送'); return; }
-  if (PUSH.perm === 'denied') { toast('通知被浏览器拦了，去站点设置里放开'); return; }
+  if (PUSH.perm === 'denied') { toast('浏览器已记住拒绝，去地址栏左侧的站点设置里改'); return; }
   const perm = await Notification.requestPermission();
   PUSH.perm = perm;
   if (perm !== 'granted') { toast('没有拿到通知权限'); return; }
@@ -733,21 +738,69 @@ async function pushTest() {
   catch (e) { toast(e.message); }
 }
 
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_STANDALONE = ((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+  || navigator.standalone === true);
+
+function pushRememberAsk() {
+  try { localStorage.setItem('kc_push_ask', String(Date.now())); } catch (e) {}
+}
+
+function pushBubble(title, text, acts) {
+  document.querySelectorAll('.push-bubble').forEach((n) => n.remove());
+  const div = document.createElement('div');
+  div.className = 'ann-bubble push-bubble';
+  div.innerHTML = '<b>' + esc(title) + '</b><p>' + esc(text) + '</p>'
+    + '<div class="push-acts">' + acts + '</div>';
+  document.body.appendChild(div);
+}
+
+function showIosPushTip() {
+  pushBubble('iPhone 要先添加到主屏幕',
+    'Safari 里开着页面收不到推送。点底部分享按钮，选「添加到主屏幕」，再从主屏幕图标打开，就能开启通知了。',
+    '<button class="later" data-act="push-ask-later">知道了</button>');
+}
+
+function showPushAsk() {
+  pushBubble('开启消息通知？',
+    '开启后，关掉页面也能收到新消息提醒。只用来推你收到的消息，不发别的。',
+    '<button class="later" data-act="push-ask-later">以后再说</button>'
+    + '<button class="btn" data-act="push-ask-ok">开启</button>');
+}
+
+function maybeAskPush() {
+  let seen = 0;
+  try { seen = Number(localStorage.getItem('kc_push_ask') || 0); } catch (e) {}
+  if (seen && Date.now() - seen < 3 * 86400000) return;
+  if (IS_IOS && !IS_STANDALONE) { showIosPushTip(); return; }
+  if (!PUSH.supported) return;
+  if (PUSH.perm === 'granted' || PUSH.perm === 'denied') return;
+  showPushAsk();
+}
+
 function pushRow() {
   if (!PUSH.supported) {
     return '<div class="item"><div class="txt"><div class="t1">浏览器通知</div>'
       + '<div class="t2">这个浏览器不支持；iPhone 要先「添加到主屏幕」</div></div></div>';
   }
   let hint = '开启后关掉页面也能收到新消息';
-  if (PUSH.perm === 'denied') hint = '被浏览器拦了，去站点设置里放开';
-  else if (PUSH.sub) hint = '已开启，关掉页面也能收到';
+  let onAct = 'push-on';
+  if (IS_IOS && !IS_STANDALONE) {
+    hint = '要先「添加到主屏幕」，再从这里开启';
+    onAct = 'push-ios-tip';
+  } else if (PUSH.perm === 'denied') {
+    hint = '浏览器记住了拒绝，点这里再请求一次权限';
+  } else if (PUSH.sub) {
+    hint = '已开启，关掉页面也能收到';
+  }
   if (PUSH.sub) {
     return '<div class="item" data-act="push-off"><div class="txt"><div class="t1">浏览器通知</div>'
       + '<div class="t2">' + hint + '</div></div><span class="arrow">关闭</span></div>'
       + '<div class="item" data-act="push-test"><div class="txt"><div class="t1">发一条测试通知</div>'
       + '</div><span class="arrow">›</span></div>';
   }
-  return '<div class="item" data-act="push-on"><div class="txt"><div class="t1">浏览器通知</div>'
+  return '<div class="item" data-act="' + onAct + '"><div class="txt"><div class="t1">浏览器通知</div>'
     + '<div class="t2">' + hint + '</div></div><span class="arrow">›</span></div>';
 }
 
@@ -923,7 +976,7 @@ function renderConvs() {
     const last = c.last ? String(c.last.body || '').slice(0, 40) : (c.kind === 'group' ? '群聊已创建' : '开始聊天吧');
     const av = c.kind === 'direct' ? avatar(c.peer) : convAvatar(c);
     const badge = c.unread > 0 ? '<span class="badge">' + (c.unread > 99 ? '99+' : c.unread) + '</span>' : '';
-    return '<div class="conv' + (S.cur && S.cur.id === c.id ? ' on' : '') + '" data-act="open-conv" data-id="' + c.id + '">'
+    return '<div class="conv' + (S.openId === c.id ? ' on' : '') + '" data-act="open-conv" data-id="' + c.id + '">'
       + av + '<div class="conv-body"><div class="conv-top"><span class="conv-name">' + esc(c.title)
       + '</span><span class="conv-time">' + (c.last ? fmtClock(c.last.created_at) : '')
       + '</span></div><div class="conv-last">' + esc(last) + '</div></div>' + badge + '</div>';
@@ -935,6 +988,7 @@ function renderConvs() {
 function showList() {
   document.body.classList.remove('chat-open', 'panel-open');
   S.view = 'chats';
+  S.openId = null;
   const p = $('#panel-view');
   p.classList.add('hidden');
   $('#chat-view').classList.add('hidden');
@@ -955,6 +1009,7 @@ function convTitle(conv, members) {
 async function openConv(id) {
   try {
     const d = await api('/api/conversations/' + id);
+    S.openId = id;
     S.cur = d.conversation;
     S.cur.members = d.members || [];
     S.cur.title = convTitle(d.conversation, d.members);
@@ -1604,6 +1659,17 @@ document.addEventListener('click', (e) => {
   toast(fmtFull(Number(row.getAttribute('data-ts'))));
 });
 
+/* 触摸按压态用 class 控制，避免移动端 :active 黏在那一行 */
+document.addEventListener('pointerdown', (e) => {
+  const row = e.target.closest('.conv');
+  if (row) row.classList.add('press');
+}, true);
+['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => {
+  document.addEventListener(ev, () => {
+    $$('.conv.press').forEach((el) => el.classList.remove('press'));
+  }, true);
+});
+
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
@@ -1626,6 +1692,13 @@ document.addEventListener('click', async (e) => {
     else if (act === 'push-on') { await pushEnable(); }
     else if (act === 'push-off') { await pushDisable(); }
     else if (act === 'push-test') { await pushTest(); }
+    else if (act === 'push-ask-later') { pushRememberAsk(); document.querySelectorAll('.push-bubble').forEach((n) => n.remove()); }
+    else if (act === 'push-ios-tip') { document.querySelectorAll('.mask').forEach((n) => n.remove()); showIosPushTip(); }
+    else if (act === 'push-ask-ok') {
+      pushRememberAsk();
+      document.querySelectorAll('.push-bubble').forEach((n) => n.remove());
+      await pushEnable();
+    }
     else if (act === 'crop-save') { await saveCrop(); }
     else if (act === 'user-card') {
       let u = S.friends.find((x) => Number(x.id) === Number(id));
@@ -1833,7 +1906,17 @@ document.addEventListener('visibilitychange', () => {
   await loadFriends();
   await loadAnns();
   connectSSE();
-  initPush();
+  initPush().finally(() => {
+    let tries = 0;
+    const tick = () => {
+      if (document.querySelector('.ann-bubble')) {
+        if (++tries < 5) setTimeout(tick, 4000);
+        return;
+      }
+      maybeAskPush();
+    };
+    setTimeout(tick, 1600);
+  });
   setTimeout(popAnnouncement, 700);
 
   // 通知点进来会带 ?conv=<id>，直接打开那条会话
