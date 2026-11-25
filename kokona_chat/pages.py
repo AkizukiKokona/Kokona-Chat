@@ -101,7 +101,11 @@ a{color:var(--brand-d);text-decoration:none}
 .msgs{flex:1;min-height:0;overflow-y:auto;padding:14px 12px 6px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .day-sep{text-align:center;margin:12px 0 10px}
 .day-sep span{font-size:11px;color:var(--sub);background:rgba(0,0,0,.04);padding:2px 8px;border-radius:6px}
-.row{display:flex;margin-bottom:12px;align-items:flex-start;gap:8px}
+.row{display:flex;margin-bottom:12px;align-items:flex-start;gap:8px;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.row.selectable .bubble{-webkit-user-select:text;user-select:text}
+.av-btn{display:block;flex:0 0 auto;border-radius:50%}
+.av-btn:active{opacity:.72}
 .row.me{flex-direction:row-reverse}
 .bubble{max-width:min(74%,560px);padding:9px 12px;border-radius:var(--radius);background:var(--bubble-other);
   word-break:break-word;white-space:pre-wrap;box-shadow:0 1px 1px rgba(0,0,0,.04);position:relative;
@@ -1165,8 +1169,10 @@ function msgHtml(m) {
   const inner = showName
     ? '<div class="col"><div class="b-meta">' + esc(displayName(m.sender)) + '</div>' + bubble + '</div>'
     : bubble;
+  const av = '<span class="av-btn" data-act="msg-user" data-id="' + (m.sender_id || 0) + '">'
+    + avatar(m.sender, 'sm') + '</span>';
   return '<div class="row' + (mine ? ' me' : '') + '" data-mid="' + m.id + '" data-ts="' + m.created_at + '">'
-    + avatar(m.sender, 'sm') + inner + '</div>';
+    + av + inner + '</div>';
 }
 
 function renderMsgs() {
@@ -1485,6 +1491,7 @@ function openMsgMenu(mid) {
 
   const items = [];
   if (canRecall(m)) items.push(['recall-msg', '撤回', m.id]);
+  if (m.kind !== 'image') items.push(['select-msg', '选择文本', m.id]);
   items.push(['hide-msg', '删除', m.id]);
   if (m.kind === 'image' && m.media && m.media.id) items.push(['save-sticker', '存表情', m.media.id]);
 
@@ -1510,6 +1517,24 @@ function openMsgMenu(mid) {
   box.style.setProperty('--caret', cx + 'px');
 
   menuOpenedAt = Date.now();
+}
+
+/** 点「选择文本」才放开这一条的文字选择，并直接全选，方便复制。 */
+function selectMsgText(id) {
+  const m = msgById(id);
+  closeMsgMenu();
+  if (!m) return;
+  const row = document.querySelector('.row[data-mid="' + m.id + '"]');
+  if (!row) return;
+  $$('.row.selectable').forEach((el) => el.classList.remove('selectable'));
+  row.classList.add('selectable');
+  const bubble = row.querySelector('.bubble');
+  if (!bubble) return;
+  const range = document.createRange();
+  range.selectNodeContents(bubble);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
 }
 
 async function recallMsg(id) {
@@ -2171,6 +2196,7 @@ async function newGroup() {
 
 /* 点一条消息：弹出它的完整时间（气泡上不再挂小字） */
 document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-act]')) return;
   const row = e.target.closest('.row[data-ts]');
   if (!row) return;
   // 长按刚弹完菜单，别顺手把时间也弹出来
@@ -2178,10 +2204,18 @@ document.addEventListener('click', (e) => {
   toast(fmtFull(Number(row.getAttribute('data-ts'))));
 });
 
-/* 菜单外点一下、列表一滚，就收起来 */
+/* 菜单外点一下、列表一滚，就收起来；顺便退出文字选择态 */
 document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('.msg-menu')) closeMsgMenu();
+  if (!e.target.closest('.row.selectable')) {
+    $$('.row.selectable').forEach((el) => el.classList.remove('selectable'));
+  }
 }, true);
+
+/* 长按气泡时不弹系统的图片/文字菜单 */
+document.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('.row')) e.preventDefault();
+});
 document.addEventListener('scroll', closeMsgMenu, true);
 window.addEventListener('resize', closeMsgMenu);
 
@@ -2222,9 +2256,21 @@ document.addEventListener('click', async (e) => {
     else if (act === 'send-sticker') { await sendSticker(Number(id)); }
     else if (act === 'upload-sticker') { const f = $('#st-file'); if (f) f.click(); }
     else if (act === 'recall-msg') { await recallMsg(Number(id)); }
+    else if (act === 'select-msg') { selectMsgText(Number(id)); }
     else if (act === 'hide-msg') { await hideMsg(Number(id)); }
     else if (act === 'save-sticker') { await saveSticker(Number(id)); }
     else if (act === 'view-image') { openViewImage(el.getAttribute('data-src')); }
+    else if (act === 'msg-user') {
+      const uid = Number(id);
+      let u = (S.cur && (S.cur.members || []).find((x) => Number(x.id) === uid))
+        || S.friends.find((x) => Number(x.id) === uid);
+      if (!u && S.me && Number(S.me.id) === uid) u = S.me;
+      if (!u) {
+        const hit = S.msgs.find((x) => Number(x.sender_id) === uid && x.sender);
+        if (hit) u = hit.sender;
+      }
+      if (u) openUserCard(u);
+    }
     else if (act === 'member-actions') { memberActions(Number(id)); }
     else if (act === 'member-card') {
       document.querySelectorAll('.mask').forEach((m) => m.remove());

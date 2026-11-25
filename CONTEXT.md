@@ -23,12 +23,14 @@ kokonachat/
 │   ├── server.py          HTTP 路由 / API / SSE / WS
 │   └── pages.py           全部页面（内联 CSS/JS，亮色，移动优先）
 ├── chat_server.py         旧版单文件（8299，老 WS 客户端专用）
+├── README.md             项目说明
 └── data/chat.db           运行后生成
 ```
 
 ## 必须守住的规则
 
-1. **云端每个会话只留最近 100 条**（`CHAT_HISTORY`）。插入时立即删旧的，别改成「查的时候才截」。
+1. **云端每个会话只留最近 N 条**（`conversations.history_max`：私聊/PKN 200，建群 300 或管理员设定值）。
+   插入时立即删旧的，别改成「查的时候才截」。`CHAT_HISTORY` 只是兜底。
 2. **私聊唯一**：`conversations.dm_key = "小id:大id"` + 唯一索引。别用「查成员集合」来判重。
 3. **只能和好友私聊**；被拉黑 / 被封禁一律拒绝，返回中文原因。
 4. **子账号（`is_sub=1`）** 只能和主账号聊，不能加好友 / 建群 / 建子账号。
@@ -52,18 +54,22 @@ kokonachat/
 - 移动端靠 `body.chat-open` / `body.panel-open` 切视图，`sidebar` 与 `main` 互斥显示；
   **不要再加底部 tabbar**——它挂在 sidebar 里，进面板时会被一起隐藏，回到列表就没入口了。
 - 抽屉（`.drawer`）从左侧滑出，顶部是**可自定义封面**的个人卡片（默认棕色渐变），
-  下面是「设置 / 通讯录 / 公告板 / 刷新 / 管理后台」。
+  下面是「设置 / 通讯录 / 添加好友 / 公告板 / 刷新 / 管理后台」。
 - 「设置」页：封面/头像、显示名、WSS 账号、改密码、公告板、退出。
-- 点好友 / 群成员 / 聊天标题 → 资料卡（`openUserCard`），样式与自己的卡片一致。
+- 点好友 / 群成员 / 聊天标题 / 消息头像 → 资料卡（`openUserCard`），样式与自己的卡片一致。
+  点了头像就不再弹消息时间：`.row[data-ts]` 的 toast 先判 `[data-act]`。
 - 会话行的按压底色是 `.conv.press`，由 `pointerdown/up` 加删；**不要用 `:active`**，
   移动端会把按下状态黏在那一行，退出聊天后还是深色。
 - 「当前打开的会话」高亮看 `S.openId`（`showList()` 里清空），**不要用 `S.cur`**——
   `S.cur` 退出后还留着给 SSE 用，拿它判高亮会导致退出后那行一直是选中色。
 - 长按消息弹的是贴着气泡的浮层 `.msg-menu`（深色圆角 + 下箭头，`position:fixed` 按气泡中心算位置，
-  贴顶时翻到下方）。**不要再改回 `openSheet` 底部弹层**。菜单项只有「撤回 / 删除 / 存表情」，
+  贴顶时翻到下方）。**不要再改回 `openSheet` 底部弹层**。菜单项按情况给「撤回 / 选择文本 / 删除 / 存表情」，
   点别处、滚动、改窗口大小都会收起；`menuOpenedAt` 用来压掉长按之后那次点击的时间 toast。
 - UI 文案不写括号解释。「删除」就是删除，不带「只删我这边」这类说明。
 - 站点名统一「心夏通讯」（`_doc` 标题、发件名 `CHAT_MAIL_NAME`、推送兜底标题）。
+- 消息里的文字默认不可选（`.row` 上 `user-select:none` + `-webkit-touch-callout:none`），
+  否则长按会先触发浏览器选字、挡掉菜单。菜单里的「选择文本」给那一条加 `.row.selectable`
+  并全选气泡内容，点别处自动退出。
 - 气泡上方的发送人名字只在**群聊/频道**里出现，而且必须在气泡**外面**（`.col > .b-meta` +
   `.bubble`）。私聊（`kind==='direct'`）和 WSS 那条（`kind==='pkn'`）都不显示名字，自己的消息也不显示。
 - **消息时间只出现在居中的小条上**（`fmtSep` → 「今天 14:32」），气泡里不再挂时间角标。
@@ -89,10 +95,9 @@ kokonachat/
 （老的 `wss://akizukikokona.com/chat/ws` 会 301，WebSocket 不跟随，等于失效）
 
 - 鉴权：`?user=用户名&pass=密码`（也认 Cookie / Bearer）
-- 协议：客户端发 `{"action":"send","conv_id":N,"text":"..."}`，服务端推 `{"type":"message",...}`
+- 协议：客户端发 `{"action":"send","conv_id":N,"body":"..."}`，服务端推 `{"type":"message",...}`
 - 旧协议（`?token=&ch=`）已废弃，插件已改，说明见 `D:\Project-Kokona\wss重适配.md`
 - PKN 协议：`pkn.hello` 由服务端下发专属会话 id（`pkn.welcome`），之后 `pkn.send` 不用带 conv_id
-- PKN 协议：`pkn.hello` 让服务端下发专属会话 id，见文档第五章
 
 **频道分配**：conv 1 = 管理员默认聊天，conv 2 = DSH 插件，conv 3 = 备用。
 旧服务 `kokona-chat.service`（8299）已停用，`/opt/kokona-chat/data/*.jsonl` 仅作归档。
@@ -126,8 +131,8 @@ nginx -t && systemctl reload nginx
 ## 群头像
 
 - 存在 `conversations.avatar`，值形如 `gv:<文件名>`，文件落 `data/groups/`，路由 `GET /gavatar/<名>`。
-- **只有群创建者（`conversations.created_by`）能换**；接口 `POST /api/conversations/<cid>/avatar`
-  对其他人返回 403「只有群主能换群头像」。群名仍然谁都能改（这是现状，别当 bug 改掉）。
+- 换头像、改群名、改群公告都限**群主与群管理员**（`can_edit_group`）。接口 `POST /api/conversations/<cid>/avatar`
+  对普通成员返回 403。
 - 前端统一用 `convAvatar(c, cls)` 渲染群头像，别再手写首字 div。
 
 ## 浏览器推送
