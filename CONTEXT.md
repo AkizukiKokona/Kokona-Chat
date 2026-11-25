@@ -100,6 +100,11 @@ nginx -t && systemctl reload nginx
 ## 已知限制
 
 - **出站 25 被 VPS 上游封死**，自建 MTA 直投不可行。只能走 587/465 中继。
+- 发信走 `smtp.yeah.net:465`（SSL，授权码当密码），配置在 `/opt/kokona-im/.env`（600）。
+  **踩过的坑**：yeah.net 有「境外客户端登录」保护，服务器 IP 不在常用地会被拒成
+  `535 authentication failed`——看着像授权码错了，实际是异地拦截。遇到 535 先让账号主人
+  在邮箱设置里放行境外登录（或临时关闭保护），再重试；不要去反复改授权码。
+- 主账号 `akizukikokona` 的 email 已设为 `akizukikokona@yeah.net`，否则「找回密码」对它无效。
 - 未配 SMTP 时验证码显示在注册页 + `/admin`，对外开放注册前必须配好。
 - 子域证书与主域共用一张（SAN 含 chat），由 certbot 续期；系统自带 certbot 1.12 太旧，
   新版在 `/opt/certbot-venv/bin/certbot`，续期请用它。

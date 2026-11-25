@@ -277,7 +277,11 @@ def api_send_code(c):
             payload["dev_code"] = code
             payload["hint"] = "服务器还没配置发信通道，验证码直接显示在这里"
         else:
-            payload["hint"] = "邮件发送失败，请联系管理员（%s）" % error
+            low = str(error or "")
+            if "535" in low or "authentication" in low.lower():
+                payload["hint"] = "邮件服务认证失败，请联系管理员检查发信授权码"
+            else:
+                payload["hint"] = "邮件发送失败，请稍后再试或联系管理员"
     return ok(**payload)
 
 
