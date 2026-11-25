@@ -155,7 +155,9 @@ a{color:var(--brand-d);text-decoration:none}
 .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .cover-scrim{position:absolute;inset:0;
   background:linear-gradient(180deg,rgba(30,18,6,.10) 0%,rgba(30,18,6,.52) 100%)}
-.profile-card > *:not(.cover-img):not(.cover-scrim){position:relative;z-index:2}
+.profile-card > .profile-av,
+.profile-card > .profile-name,
+.profile-card > .profile-id{position:relative;z-index:2}
 .cover-edit{position:absolute;right:12px;top:calc(10px + env(safe-area-inset-top));z-index:3;
   padding:5px 10px;border-radius:999px;background:rgba(0,0,0,.32);color:#fff;font-size:11px;
   backdrop-filter:blur(4px)}
@@ -194,7 +196,8 @@ a{color:var(--brand-d);text-decoration:none}
 /* ---------- 设置页 ---------- */
 .set-hero{position:relative;overflow:hidden;border-radius:14px;margin-bottom:14px;min-height:140px;
   background:var(--cover-grad);color:#fff;padding:18px 16px 16px;display:flex;align-items:flex-end;gap:13px}
-.set-hero > *:not(.cover-img):not(.cover-scrim){position:relative;z-index:2}
+.set-hero > .set-av,
+.set-hero > .set-hero-txt{position:relative;z-index:2}
 .set-av{width:62px;height:62px;border-radius:50%;object-fit:cover;flex:0 0 auto;
   border:2px solid rgba(255,255,255,.9);background:#efe4d0;box-shadow:0 3px 12px rgba(0,0,0,.16)}
 .set-hero-txt{flex:1;min-width:0;padding-bottom:2px}
