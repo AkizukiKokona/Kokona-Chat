@@ -2889,32 +2889,39 @@ function diagFlush(beacon) {
   let geomTimer = 0;
   let probeN = 0;
   let fitTick = 0;
-  let deadFix = false;
   let lastGoodH = Math.round(window.innerHeight || 0);
 
-  // 视口被报成 0 时的兜底：不让布局塌掉
+  // 视口被报成 0 时的兜底。
+  // 已知缺陷（Android 10/API29 起被记录，WebView 由宿主决定 insets）：浏览器/宿主把键盘高度
+  // 减了两次，页面上报的高度 h = S - 2k，极端情况直接 clamp 到 0。
+  // 反过来推：真实可见高度 ≈ (S + h) / 2。S 取上一次正常高度。
+  let deadFix = false;
+  let deadH = 0;
   function deadGuard() {
     const lh = Math.round(window.innerHeight || 0);
     const vh = Math.round((vv ? vv.height : lh) || 0);
     if (lh > 80) lastGoodH = lh;
-    const dead = lh < 80 || vh < 80;
-    if (dead) {
-      if (kbFit) clearKbFit();          // 视口都没了，iOS 那套也别算
-      if (lastGoodH > 80) {
-        if (!deadFix) diag('dead', { on: 1, lh, vh, lastGoodH });
-        deadFix = true;
-        root.style.setProperty('--app-h', lastGoodH + 'px');
-        root.style.setProperty('--vv-top', '0px');
+    // 布局视口正常 → 一律交给 CSS，别插手
+    if (lh >= 80) {
+      if (deadFix) {
+        deadFix = false;
+        deadH = 0;
+        diag('dead', { on: 0, lh, vh, lastGoodH });
+        root.style.removeProperty('--app-h');
+        root.style.removeProperty('--vv-top');
       }
-      return true;
+      return false;
     }
-    if (deadFix && !kbFit) {
-      deadFix = false;
-      diag('dead', { on: 0, lh, vh, lastGoodH });
-      root.style.removeProperty('--app-h');
-      root.style.removeProperty('--vv-top');
+    if (kbFit) clearKbFit();           // 视口都没了，iOS 那套也别算
+    if (lastGoodH > 80) {
+      const vhSafe = Math.max(0, Math.min(vh, lastGoodH));
+      deadH = Math.max(110, Math.round((lastGoodH + vhSafe) / 2));
+      if (!deadFix) diag('dead', { on: 1, lh, vh, lastGoodH, deadH });
+      deadFix = true;
+      root.style.setProperty('--app-h', deadH + 'px');
+      root.style.setProperty('--vv-top', '0px');
     }
-    return false;
+    return true;
   }
   function clearKbFit() {
     if (!kbFit) return;
@@ -2946,7 +2953,8 @@ function diagFlush(beacon) {
     const ta = $('#input');
     if (!ta) return;
     let vh = Math.round((vv ? vv.height : window.innerHeight) || 0);
-    if (vh < 80) vh = lastGoodH;   // 浏览器报 0 时按上次正常高度算，别把框算成 0
+    // 浏览器报 0 时按兜底高度算（同样是双倍扣键盘的推算值），别把框算成 0
+    if (vh < 80) vh = deadFix && deadH ? deadH : lastGoodH;
     // 太矮时把聊天头压扁，肉眼能多出一行
     document.body.classList.toggle('kb-tight', vh > 0 && vh < 240);
     const cs = getComputedStyle(ta);

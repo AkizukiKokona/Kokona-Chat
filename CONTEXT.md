@@ -87,6 +87,13 @@ kokonachat/
   所以看起来像「刷新后只触发一次」。`deadGuard()` 就是为这个：读到 <80 时用上一次正常高度顶住，
   `--app-h` 写成 px；一旦报出真值立刻交回 CSS。聚焦期间 400ms 对一次表，最多 12 秒。
   日志里有 `dead{on:1/0}` 记录这段状态开始和结束，复现时先看它持续了多久。
+- 这个坑别人也踩过：capawesome/capacitor-plugins **issue #848**（2026-04）记录 Android 10/API 29
+  键盘弹起后 `window.innerHeight = 47`、`visualViewport.height = 47.24`、`screen.height = 732`，
+  也就是 **WebView 只剩屏幕 6%**，并给出算式 `screen.height − 键盘高 × 2`——宿主把键盘 insets
+  减了两遍。Android WebView 不受 Chrome 108 的 `resizes-visual` 保护（`windowSoftInputMode` 由宿主决定），
+  所以这是宿主层缺陷，网页端只能兜。
+  因此兜底不是「沿用上次高度」，而是按反推：**可见高度 ≈ (S + h) / 2**（h 为浏览器上报值，
+  S 为上次正常高度，读到 0 就是 S/2），再夹一个 110px 下限。手表 356 + 0 → 178，实测可用。
 - **iOS 的坑单独记**：微信内置浏览器（WKWebView）在键盘动画结束后**可能根本不发最后一次
   `visualViewport.resize`**，于是 `--app-h` 停在动画中途那个偏小的值上——截图实测就是这样：
   输入栏停在屏幕 30%，下面 29% 全是空的页面底色，键盘却在 59% 处。
