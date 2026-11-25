@@ -119,6 +119,7 @@ a{color:var(--brand-d);text-decoration:none}
 .send-btn{padding:0 16px;height:40px;border-radius:9px;background:var(--brand);color:#fff;font-weight:600}
 .send-btn:active{background:var(--brand-d)}
 .cmb{font-size:19px;line-height:1;padding:0 6px;height:40px;color:var(--sub)}
+.cmb.plus{font-size:23px;font-weight:300;padding:0 4px}
 .cmb:active{color:var(--brand)}
 .bubble.img{padding:4px;background:transparent;box-shadow:none;max-width:min(72%,240px)}
 .bubble.img img{display:block;width:100%;height:auto;border-radius:10px;background:var(--soft)}
@@ -613,8 +614,8 @@ APP_BODY = """<div class="app" id="app">
       </header>
       <div class="msgs" id="msgs"></div>
       <div class="composer">
+        <button class="cmb plus" data-act="open-plus" title="更多">＋</button>
         <textarea id="input" rows="1" placeholder="发消息…" autocomplete="off"></textarea>
-        <button class="cmb" data-act="pick-image" title="图片">🖼</button>
         <button class="cmb" data-act="open-stickers" title="表情">😊</button>
         <button class="send-btn" data-act="send">发送</button>
       </div>
@@ -2046,8 +2047,20 @@ document.addEventListener('click', async (e) => {
     else if (act === 'pick-avatar') { const f = $('#av-file'); if (f) f.click(); }
     else if (act === 'pick-cover') { const f = $('#cover-file'); if (f) f.click(); }
     else if (act === 'pick-group-avatar') { const f = $('#gv-file'); if (f) f.click(); }
-    else if (act === 'pick-image') { const f = $('#img-file'); if (f) f.click(); }
-    else if (act === 'open-stickers') { await openStickers(); }
+    else if (act === 'open-plus') {
+      openSheet('发送',
+        '<div class="card" style="margin:0">'
+        + '<div class="item" data-act="pick-image"><div class="txt"><div class="t1">图片</div>'
+        + '<div class="t2">会压成 webp 再发，省流量</div></div></div>'
+        + '<div class="item" data-act="open-stickers"><div class="txt"><div class="t1">表情包</div></div></div>'
+        + '</div>', '');
+    }
+    else if (act === 'pick-image') {
+      const f = $('#img-file');
+      if (f) f.click();
+      setTimeout(() => document.querySelectorAll('.mask').forEach((m) => m.remove()), 120);
+    }
+    else if (act === 'open-stickers') { document.querySelectorAll('.mask').forEach((m) => m.remove()); await openStickers(); }
     else if (act === 'send-sticker') { await sendSticker(Number(id)); }
     else if (act === 'recall-msg') { await recallMsg(Number(id)); }
     else if (act === 'hide-msg') { await hideMsg(Number(id)); }
