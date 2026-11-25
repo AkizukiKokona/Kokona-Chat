@@ -81,6 +81,12 @@ kokonachat/
 - **输入法组词期间（compositionstart→end）不要改 textarea 的样式**：改高度会触发重排，
   部分安卓 IME 会丢组合串，表现为「拼音打不出来」。`grow()` 在 `composing` 时直接返回，
   上屏后再量。输入框高度的监听只保留 `boot()` 里那一处，别再往全局挂 `input`。
+- **iOS 的坑单独记**：微信内置浏览器（WKWebView）在键盘动画结束后**可能根本不发最后一次
+  `visualViewport.resize`**，于是 `--app-h` 停在动画中途那个偏小的值上——截图实测就是这样：
+  输入栏停在屏幕 30%，下面 29% 全是空的页面底色，键盘却在 59% 处。
+  对策：聚焦后 6 秒内每 0.5s 再对一次表（`fitTick`），blur 立刻停。
+  如果对表也拿不到正确值，说明 `vv.height` 本身就不可信，那时看 `bad` 日志里的
+  `vh / vbot / ab / cb` 再决定，别再拍脑袋。
 - 诊断里的 `geom`/`bad` 只观测不干预：`geom` 记 innerHeight / vv.height / scale / app 实际矩形；
   页面比屏幕矮 40px 以上会强制上报 `bad`（就是「多一片白」的形态），下次复发直接看日志。
 - 前端诊断：地址加 `?diag=1` 全量上报；触摸设备默认只在 `err` / `rej` / `bad`（布局自检发现

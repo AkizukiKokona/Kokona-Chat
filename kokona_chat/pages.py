@@ -2885,6 +2885,8 @@ function diagFlush(beacon) {
   const vv = window.visualViewport;
   const root = document.documentElement;
   let kbFit = false;
+  let geomTimer = 0;
+  let fitTick = 0;
   function clearKbFit() {
     if (!kbFit) return;
     kbFit = false;
@@ -2902,6 +2904,7 @@ function diagFlush(beacon) {
     kbFit = true;
     root.style.setProperty('--app-h', vh + 'px');
     root.style.setProperty('--vv-top', Math.round(vv.offsetTop || 0) + 'px');
+    geomSoon('ios-fit');
   }
   // 输入框高度上限：正常给 4 行，键盘顶上来把可视区压到一百多像素时按剩余空间收
   // （手表的真实数据：屏 292×356，键盘一弹 vh 只有 137，头 55，4 行 104 必然被裁掉）
@@ -2937,8 +2940,8 @@ function diagFlush(beacon) {
   window.addEventListener('resize', capSoon);
   window.addEventListener('orientationchange', () => setTimeout(() => { clearKbFit(); taCap(); }, 240));
   if (vv) {
-    vv.addEventListener('resize', capSoon);
-    vv.addEventListener('scroll', capSoon);
+    vv.addEventListener('resize', () => { capSoon(); geomSoon('kb-resize'); });
+    vv.addEventListener('scroll', () => { capSoon(); geomSoon('kb-scroll'); });
   }
   if (IS_IOS && vv) {
     vv.addEventListener('resize', fitIosKeyboard);
@@ -2947,34 +2950,44 @@ function diagFlush(beacon) {
     document.addEventListener('focusout', () => setTimeout(clearKbFit, 120));
   }
   // 只观测、不干预：页面到底比屏幕矮多少，出问题时能直接从诊断里看出来
+  // 以「可见区底边」为唯一基准（安卓=布局视口底边，iOS=键盘上沿），量三个差值：
+  //   abg 整页底边差多少 / cbg 输入栏底边差多少 / ibg 页面内部下方空多少
+  // 三个都≈0 才是对的。只观测，不改布局。
   function geomSnap(tag) {
     const app = document.querySelector('.app');
     if (!app) return;
     const r = app.getBoundingClientRect();
     const lh = Math.round(window.innerHeight || 0);
     const vh = Math.round((vv ? vv.height : window.innerHeight) || 0);
-    const gap = Math.round(lh - r.height);
+    const vtop = Math.round(vv ? vv.offsetTop || 0 : 0);
+    const vbot = vtop + vh;
     const comp = document.querySelector('.composer');
-    const cb = comp && comp.getBoundingClientRect().height > 0
-      ? Math.round(comp.getBoundingClientRect().bottom) : 0;
-    // iOS 键盘期把「底」算在可视区，不然每次打字都会误报
-    const cgap = cb ? Math.round((kbFit ? vh : lh) - cb) : 0;
+    const cr = comp && comp.getBoundingClientRect().height > 0 ? comp.getBoundingClientRect() : null;
+    const cb = cr ? Math.round(cr.bottom) : 0;
+    const ah = Math.round(r.height);
+    const ab = Math.round(r.bottom);
+    const abg = Math.round(vbot - ab);
+    const cbg = cb ? Math.round(vbot - cb) : 0;
+    const ibg = cb ? Math.round(ab - cb) : 0;
     const tray = document.querySelector('#tray');
     const trayOn = !!(tray && tray.offsetHeight > 0);
     diag('geom', {
-      tag, lh, vh, sc: vv ? Number((vv.scale || 1).toFixed(2)) : 0,
-      top: Math.round(vv ? vv.offsetTop || 0 : 0),
-      ah: Math.round(r.height), ab: Math.round(r.bottom),
+      tag, lh, vh, vtop, vbot, ah, ab, cb, abg, cbg, ibg,
+      sc: vv ? Number((vv.scale || 1).toFixed(2)) : 0,
       dh: document.documentElement.clientHeight, oh: window.outerHeight,
-      sh: window.screen ? screen.height : 0,
-      cb, cgap, tray: trayOn ? 1 : 0
+      sh: window.screen ? screen.height : 0, tray: trayOn ? 1 : 0
     });
-    // 「多一片白」的两种形态：整页比屏幕矮 / 输入栏没贴到底，都强制上报
-    if (Math.abs(gap) > 40 || cgap > 40 || (cb && cb > lh + 2)) {
+    // 明显不对才强制上报，平时不写日志
+    if (Math.abs(abg) > 40 || Math.abs(cbg) > 40 || Math.abs(ibg) > 40) {
       diag('bad', {
-        tag, gap, cgap, lh, vh, ah: Math.round(r.height), ab: Math.round(r.bottom), cb, tray: trayOn ? 1 : 0
+        tag, abg, cbg, ibg, lh, vh, vtop, ah, ab, cb,
+        sc: vv ? Number((vv.scale || 1).toFixed(2)) : 0, tray: trayOn ? 1 : 0
       });
     }
+  }
+  function geomSoon(tag) {
+    clearTimeout(geomTimer);
+    geomTimer = setTimeout(() => geomSnap(tag), 420);
   }
   geomSnap('boot');
   setTimeout(() => geomSnap('t1'), 900);
@@ -3027,10 +3040,21 @@ function diagFlush(beacon) {
       closeTray();
       taCap();
       // 只让 iOS 补一次；安卓什么都不做
-      if (IS_IOS) [100, 300, 600].forEach((d) => setTimeout(fitIosKeyboard, d));
+      // 微信/WKWebView 的键盘动画有时不发最后一次 resize：补几拍 + 之后 6 秒内每 0.5 秒对一次
+      if (IS_IOS) {
+        [80, 200, 400, 700, 1100, 1600].forEach((d) => setTimeout(fitIosKeyboard, d));
+        clearInterval(fitTick);
+        let n = 0;
+        fitTick = setInterval(() => {
+          fitIosKeyboard();
+          if (++n >= 12) { clearInterval(fitTick); fitTick = 0; }
+        }, 500);
+      }
     });
     inputEl.addEventListener('blur', () => {
       diag('blur');
+      clearInterval(fitTick);
+      fitTick = 0;
       clearKbFit();
     });
   }
