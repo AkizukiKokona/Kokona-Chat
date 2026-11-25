@@ -74,11 +74,11 @@ a{color:var(--brand-d);text-decoration:none}
 .conv{display:flex;gap:10px;padding:11px 14px;align-items:center;position:relative}
 .conv.press{background:#ececec}
 .conv.on{background:#f4e8d4}
-.avatar{width:44px;height:44px;border-radius:8px;background:#d9c6a8;color:#fff;display:flex;
+.avatar{width:44px;height:44px;border-radius:50%;background:#d9c6a8;color:#fff;display:flex;
   align-items:center;justify-content:center;font-weight:600;font-size:16px;flex:0 0 auto;overflow:hidden}
 .avatar img{width:100%;height:100%;object-fit:cover}
 .avatar.g{background:#b08050}
-.avatar.sm{width:34px;height:34px;font-size:13px;border-radius:7px}
+.avatar.sm{width:34px;height:34px;font-size:13px;border-radius:50%}
 .conv-body{flex:1;min-width:0}
 .conv-top{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
 .conv-name{font-weight:500;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -113,13 +113,31 @@ a{color:var(--brand-d);text-decoration:none}
 .sys{text-align:center;font-size:12px;color:var(--sub);margin:10px 0}
 .composer{display:flex;gap:8px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);
   align-items:flex-end;flex:0 0 auto;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
-.composer textarea{flex:1;resize:none;max-height:120px;min-height:40px;padding:9px 12px;border-radius:9px;
+.composer textarea{flex:1 1 0;min-width:0;resize:none;max-height:120px;min-height:40px;padding:9px 12px;border-radius:9px;
   border:1px solid var(--line);background:var(--soft);outline:none;line-height:1.4;overflow-y:auto}
 .composer textarea:focus{border-color:var(--brand);background:#fff}
-.send-btn{padding:0 16px;height:40px;border-radius:9px;background:var(--brand);color:#fff;font-weight:600}
+.send-btn{flex:0 0 auto;padding:0 14px;height:40px;border-radius:9px;background:var(--brand);color:#fff;font-weight:600}
 .send-btn:active{background:var(--brand-d)}
-.cmb{font-size:19px;line-height:1;padding:0 6px;height:40px;color:var(--sub)}
-.cmb.plus{font-size:23px;font-weight:300;padding:0 4px}
+.cmb{display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex:0 0 auto;
+  border-radius:50%;color:var(--sub);padding:0;margin-bottom:3px}
+.cmb svg{display:block}
+.cmb:active,.cmb.on{background:#f4e8d4;color:var(--brand)}
+.composer{align-items:center}
+.main,.chat-view,.msgs,.tray{min-width:0}
+.chat-view{overflow-x:hidden}
+.tray{flex:0 0 auto;height:268px;overflow-y:auto;background:var(--panel);
+  border-top:1px solid var(--line);padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
+.tray-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.tray-cell{min-width:0;aspect-ratio:1/1;border-radius:10px;background:var(--soft);display:flex;
+  align-items:center;justify-content:center;overflow:hidden;padding:4px}
+.tray-cell img{max-width:100%;max-height:100%;object-fit:contain}
+.tray-cell.up{color:var(--sub);background:#f7f3ea;border:1px dashed var(--line)}
+.tray-big{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.tray-big button{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:12px;
+  color:var(--text);background:transparent}
+.tray-big .ic{width:54px;height:54px;border-radius:14px;background:var(--soft);
+  display:flex;align-items:center;justify-content:center;color:var(--brand)}
+.tray-tip{color:var(--sub);font-size:12px;text-align:center;padding:16px 8px;line-height:1.7}
 .cmb:active{color:var(--brand)}
 .bubble.img{padding:4px;background:transparent;box-shadow:none;max-width:min(72%,240px)}
 .bubble.img img{display:block;width:100%;height:auto;border-radius:10px;background:var(--soft)}
@@ -133,7 +151,7 @@ a{color:var(--brand-d);text-decoration:none}
 .ucard-top{background:var(--cover-grad);padding:26px 20px 22px;border-radius:0}
 .chat-title.typing{color:var(--brand);font-weight:600;font-size:14px}
 .ucard-top .ucard-close{z-index:4}
-.ucard-top > .profile-av{border-radius:18px}
+.ucard-top > .profile-av{border-radius:50%}
 .pill.role{background:#f4e8d4;color:var(--brand-d);margin-left:6px}
 
 /* ---------- 面板（通讯录等） ---------- */
@@ -177,7 +195,7 @@ a{color:var(--brand-d);text-decoration:none}
 .profile-card > .profile-av,
 .profile-card > .profile-name,
 .profile-card > .profile-id{position:relative;z-index:2}
-.profile-av{width:66px;height:66px;border-radius:18px;object-fit:cover;
+.profile-av{width:66px;height:66px;border-radius:50%;object-fit:cover;
   border:2px solid rgba(255,255,255,.85);box-shadow:0 4px 14px rgba(0,0,0,.16);background:#fff}
 .profile-name{font-size:19px;font-weight:700;margin-top:12px}
 .profile-id{font-size:12px;opacity:.88;margin-top:3px}
@@ -232,7 +250,7 @@ a{color:var(--brand-d);text-decoration:none}
 .set-group-head{padding:12px 16px 8px;font-size:12px;font-weight:600;color:var(--sub)}
 .gset-head{display:flex;align-items:center;gap:12px;padding:16px 16px;border-bottom:1px solid var(--line);
   margin-bottom:12px}
-.gset-head .avatar.lg{width:56px;height:56px;border-radius:14px;font-size:20px;flex:0 0 auto}
+.gset-head .avatar.lg{width:56px;height:56px;border-radius:50%;font-size:20px;flex:0 0 auto}
 .gset-info{flex:1;min-width:0}
 .gset-name{font-size:16px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gset-sub{font-size:12px;color:var(--sub);margin-top:3px}
@@ -614,11 +632,21 @@ APP_BODY = """<div class="app" id="app">
       </header>
       <div class="msgs" id="msgs"></div>
       <div class="composer">
-        <button class="cmb plus" data-act="open-plus" title="更多">＋</button>
+        <button class="cmb" data-act="open-plus" title="更多" aria-label="更多">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+               stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/>
+            <path d="M12 8.2v7.6M8.2 12h7.6"/></svg>
+        </button>
         <textarea id="input" rows="1" placeholder="发消息…" autocomplete="off"></textarea>
-        <button class="cmb" data-act="open-stickers" title="表情">😊</button>
+        <button class="cmb" data-act="open-stickers" title="表情" aria-label="表情">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+               stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/>
+            <path d="M9 9.6h.01M15 9.6h.01"/>
+            <path d="M8.4 14.2c.9 1.2 2.1 1.8 3.6 1.8s2.7-.6 3.6-1.8"/></svg>
+        </button>
         <button class="send-btn" data-act="send">发送</button>
       </div>
+      <div class="tray hidden" id="tray"></div>
     </section>
     <section class="panel hidden" id="panel-view"></section>
   </main>
@@ -638,6 +666,7 @@ APP_BODY = """<div class="app" id="app">
   </aside>
 </div>
 <input type="file" id="img-file" accept="image/*" hidden>
+<input type="file" id="st-file" accept="image/*" hidden>
 <div class="toast" id="toast"></div>
 """
 
@@ -1045,6 +1074,7 @@ function writeMsgCache(id, msgs) {
 async function openConv(id) {
   try {
     hideTyping();
+    closeTray();
     S.openId = id;
     const cached = readMsgCache(id);
     if (cached && cached.length) {
@@ -1239,20 +1269,95 @@ const onImagePicked = (e) => {
 
 let STICKERS = [];
 
-async function openStickers() {
+let trayMode = '';
+
+function closeTray() {
+  trayMode = '';
+  const t = $('#tray');
+  if (t) { t.classList.add('hidden'); t.innerHTML = ''; }
+  $$('.cmb').forEach((b) => b.classList.remove('on'));
+}
+
+function trayToggle(mode) {
+  if (trayMode === mode) { closeTray(); return; }
+  trayMode = mode;
+  const t = $('#tray');
+  if (!t) return;
+  t.classList.remove('hidden');
+  $$('.cmb').forEach((b) => b.classList.toggle('on', b.getAttribute('data-act') ===
+    (mode === 'plus' ? 'open-plus' : 'open-stickers')));
+  if (mode === 'plus') renderPlusTray(); else renderStickerTray();
+  $('#input').blur();
+  scrollBottom(true);
+}
+
+function renderPlusTray() {
+  $('#tray').innerHTML = '<div class="tray-big">'
+    + '<button data-act="pick-image"><span class="ic">'
+    + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5">'
+    + '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/>'
+    + '<path d="M5 17l4.5-4.5 3.5 3.5 2.5-2.5L20 17" stroke-linecap="round"/></svg></span>图片</button>'
+    + '<button data-act="open-stickers"><span class="ic">'
+    + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5">'
+    + '<circle cx="12" cy="12" r="9"/><path d="M9 9.6h.01M15 9.6h.01" stroke-linecap="round"/>'
+    + '<path d="M8.4 14.2c.9 1.2 2.1 1.8 3.6 1.8s2.7-.6 3.6-1.8" stroke-linecap="round"/></svg>'
+    + '</span>表情包</button></div>';
+}
+
+async function renderStickerTray() {
+  const t = $('#tray');
+  t.innerHTML = '<div class="tray-tip">读取表情…</div>';
   try {
     const d = await api('/api/stickers');
     STICKERS = d.stickers || [];
-    const limitText = d.limit ? ('已存 ' + STICKERS.length + ' / ' + d.limit) : ('已存 ' + STICKERS.length);
-    const body = STICKERS.length
-      ? '<div class="st-grid">' + STICKERS.map((st) =>
-          '<div class="st-cell" data-act="send-sticker" data-id="' + st.id + '">'
-          + '<img src="' + esc(st.url) + '" alt=""></div>').join('') + '</div>'
-      : '<div class="st-empty">还没有表情包<br>长按别人发的图片，就能存成表情</div>';
-    openSheet('表情包', body + '<div class="set-note">' + limitText
-      + ' · 长按表情可以删除</div>', '');
-    const cells = $$('.st-cell');
-    cells.forEach((cell) => bindLongPress(cell, () => deleteSticker(Number(cell.getAttribute('data-id')))));
+    const upCell = '<div class="tray-cell up" data-act="upload-sticker" title="上传表情">'
+      + '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"'
+      + ' stroke-width="1.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></div>';
+    const grid = '<div class="tray-grid" id="st-grid">'
+      + (STICKERS.length
+        ? STICKERS.map((st) => '<div class="tray-cell" data-act="send-sticker" data-id="' + st.id + '">'
+          + '<img src="' + esc(st.url) + '" alt=""></div>').join('')
+        : '')
+      + upCell + '</div>'
+      + (STICKERS.length ? '' : '<div class="tray-tip">还没有表情，点上面的 ＋ 上传，或长按聊天里的图片存下来</div>');
+    t.innerHTML = grid + '<div class="tray-tip" style="padding:10px 4px 2px">'
+      + (d.limit ? ('已存 ' + STICKERS.length + ' / ' + d.limit) : ('已存 ' + STICKERS.length))
+      + ' · 长按删除 · 点空白处上传</div>';
+    $$('.tray-cell', t).forEach((cell) => {
+      bindLongPress(cell, () => deleteSticker(Number(cell.getAttribute('data-id'))));
+    });
+    const g = $('#st-grid');
+    if (g) {
+      g.addEventListener('click', (ev) => {
+        if (ev.target.closest('[data-act]')) return;
+        const f = $('#st-file');
+        if (f) f.click();
+      });
+    }
+  } catch (e) {
+    t.innerHTML = '<div class="tray-tip">表情读取失败：' + esc(e.message) + '</div>';
+  }
+}
+
+async function uploadSticker(file) {
+  try {
+    const data = await fileToWebp(file);
+    const up = await api('/api/media', 'POST', { data: data });
+    await api('/api/stickers', 'POST', { media_id: up.media.id });
+    toast('已存为表情');
+    renderStickerTray();
+  } catch (e) { toast('上传失败：' + (e.message || '未知错误')); }
+}
+
+const onStickerPicked = (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) uploadSticker(file);
+};
+
+async function sendSticker(id) {
+  try {
+    await api('/api/conversations/' + S.cur.id + '/messages', 'POST', { media_id: id, body: '' });
   } catch (e) { toast(e.message); }
 }
 
@@ -1260,8 +1365,7 @@ async function deleteSticker(id) {
   try {
     await api('/api/stickers/' + id, 'DELETE');
     toast('已删除');
-    document.querySelectorAll('.mask').forEach((m) => m.remove());
-    openStickers();
+    if (trayMode === 'stickers') renderStickerTray();
   } catch (e) { toast(e.message); }
 }
 
@@ -1900,13 +2004,29 @@ function openCropper(src, mode) {
 async function saveCrop() {
   const img = CROP.img;
   if (!img || !CROP.bw) { toast('\u56fe\u7247\u8fd8\u6ca1\u51c6\u5907\u597d'); return; }
-  const s = CROP.base * CROP.zoom;
-  const sw = CROP.bw / s, sh = CROP.bh / s;
-  const sx = CROP.w / 2 - CROP.x / s - sw / 2;
-  const sy = CROP.h / 2 - CROP.y / s - sh / 2;
   const mode = CROP.mode || 'avatar';
   const cover = mode === 'cover';
   const outW = cover ? 720 : 256, outH = cover ? 480 : 256;
+
+  // 按「实际渲染出来的像素」反推原图取景框：宽高各自算，绝不会把原图压成别的比例
+  const boxEl = $('#crop-box');
+  if (!boxEl) { toast('裁剪框丢了'); return; }
+  const rect = img.getBoundingClientRect();
+  const br = boxEl.getBoundingClientRect();
+  if (!rect.width || !rect.height || !br.width || !br.height) { toast('图片还没准备好'); return; }
+  const kx = img.naturalWidth / rect.width;
+  const ky = img.naturalHeight / rect.height;
+
+  let frameW = br.width, frameH = br.height;
+  if (!cover) {
+    // 头像是正方形：在框里取居中的正方形，保证输出不变形
+    const side = Math.min(br.width, br.height);
+    frameW = side; frameH = side;
+  }
+  const sw = frameW * kx;
+  const sh = frameH * ky;
+  const sx = ((br.left + br.width / 2) - rect.left) * kx - sw / 2;
+  const sy = ((br.top + br.height / 2) - rect.top) * ky - sh / 2;
   const cv = document.createElement('canvas');
   cv.width = outW; cv.height = outH;
   const ctx = cv.getContext('2d');
@@ -2047,21 +2167,11 @@ document.addEventListener('click', async (e) => {
     else if (act === 'pick-avatar') { const f = $('#av-file'); if (f) f.click(); }
     else if (act === 'pick-cover') { const f = $('#cover-file'); if (f) f.click(); }
     else if (act === 'pick-group-avatar') { const f = $('#gv-file'); if (f) f.click(); }
-    else if (act === 'open-plus') {
-      openSheet('发送',
-        '<div class="card" style="margin:0">'
-        + '<div class="item" data-act="pick-image"><div class="txt"><div class="t1">图片</div>'
-        + '<div class="t2">会压成 webp 再发，省流量</div></div></div>'
-        + '<div class="item" data-act="open-stickers"><div class="txt"><div class="t1">表情包</div></div></div>'
-        + '</div>', '');
-    }
-    else if (act === 'pick-image') {
-      const f = $('#img-file');
-      if (f) f.click();
-      setTimeout(() => document.querySelectorAll('.mask').forEach((m) => m.remove()), 120);
-    }
-    else if (act === 'open-stickers') { document.querySelectorAll('.mask').forEach((m) => m.remove()); await openStickers(); }
+    else if (act === 'open-plus') { trayToggle('plus'); }
+    else if (act === 'pick-image') { const f = $('#img-file'); if (f) f.click(); }
+    else if (act === 'open-stickers') { trayToggle('stickers'); }
     else if (act === 'send-sticker') { await sendSticker(Number(id)); }
+    else if (act === 'upload-sticker') { const f = $('#st-file'); if (f) f.click(); }
     else if (act === 'recall-msg') { await recallMsg(Number(id)); }
     else if (act === 'hide-msg') { await hideMsg(Number(id)); }
     else if (act === 'save-sticker') { await saveSticker(Number(id)); }
@@ -2338,7 +2448,10 @@ document.addEventListener('visibilitychange', () => {
     inputEl.addEventListener('input', () => {
       sendTyping(!!inputEl.value.trim());
     });
+    inputEl.addEventListener('focus', () => closeTray());
   }
+  const stInput = $('#st-file');
+  if (stInput) stInput.addEventListener('change', onStickerPicked);
   const imgInput = $('#img-file');
   if (imgInput) imgInput.addEventListener('change', onImagePicked);
   connectSSE();
