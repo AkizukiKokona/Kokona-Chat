@@ -1,4 +1,4 @@
-/* 心夏 Chat 的 Service Worker：只干两件事——弹通知、点通知回到会话。 */
+/* 心夏通讯的 Service Worker：只干两件事——弹通知、点通知回到会话。 */
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -23,7 +23,7 @@ self.addEventListener('push', (event) => {
       if (!isTest && wins.some((w) => w.focused)) return;
     } catch (err) { /* 拿不到窗口就照常弹 */ }
 
-    await self.registration.showNotification(data.title || '心夏 Chat', {
+    await self.registration.showNotification(data.title || '心夏通讯', {
       body: data.body || '',
       icon,
       badge: '/static/icon.png',

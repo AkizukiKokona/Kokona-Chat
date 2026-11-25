@@ -137,6 +137,16 @@ a{color:var(--brand-d);text-decoration:none}
   color:var(--text);background:transparent}
 .tray-big .ic{width:54px;height:54px;border-radius:14px;background:var(--soft);
   display:flex;align-items:center;justify-content:center;color:var(--brand)}
+.msg-menu{position:fixed;z-index:88;display:flex;align-items:stretch;padding:3px;
+  background:#2f2a25;border-radius:11px;box-shadow:0 8px 26px rgba(0,0,0,.28);
+  animation:menu-in .13s ease-out}
+@keyframes menu-in{from{opacity:0;transform:translateY(4px) scale(.96)}to{opacity:1;transform:none}}
+.msg-menu button{appearance:none;border:0;background:none;color:#f4ede1;font:inherit;font-size:13px;
+  line-height:1;padding:10px 13px;border-radius:8px;white-space:nowrap}
+.msg-menu button:active{background:rgba(255,255,255,.13)}
+.msg-menu .caret{position:absolute;bottom:-5px;left:var(--caret,50%);margin-left:-5px;
+  width:10px;height:10px;background:#2f2a25;transform:rotate(45deg);border-radius:2px}
+.msg-menu.below .caret{bottom:auto;top:-5px}
 .tray-tip{color:var(--sub);font-size:12px;text-align:center;padding:16px 8px;line-height:1.7}
 .cmb:active{color:var(--brand)}
 .bubble.img{padding:4px;background:transparent;box-shadow:none;max-width:min(72%,240px)}
@@ -389,15 +399,15 @@ document.getElementById('form').addEventListener('submit', async (e) => {
 def login_page(base=None):
     body = """
 <div class="auth-wrap"><div class="auth-card">
-  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏 Chat">
-  <h1 class="auth-title">心夏 Chat</h1>
+  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏通讯">
+  <h1 class="auth-title">心夏通讯</h1>
   <p class="auth-sub">登录后继续聊天</p>
   <form id="form" autocomplete="on">
     <div class="field"><label for="username">账号</label>
       <input id="username" name="username" autocomplete="username" placeholder="用户名或邮箱"></div>
     <div class="field"><label for="password">密码</label>
       <input id="password" name="password" type="password" autocomplete="current-password" placeholder="密码"></div>
-    <label class="remember"><input type="checkbox" id="remember" checked>记住账号密码（仅保存在本机）</label>
+    <label class="remember"><input type="checkbox" id="remember" checked>记住账号密码</label>
     <div class="msg-line" id="msg"></div>
     <button class="btn" id="submit" type="submit">登录</button>
   </form>
@@ -407,7 +417,7 @@ def login_page(base=None):
   </div>
 </div></div>
 """.replace("__BASE__", config.BASE or "" if base is None else base)
-    return _doc("登录 · 心夏 Chat", body, extra_js=LOGIN_JS, base=base)
+    return _doc("登录 · 心夏通讯", body, extra_js=LOGIN_JS, base=base)
 
 
 REGISTER_JS = """
@@ -474,7 +484,7 @@ document.getElementById('form').addEventListener('submit', async (e) => {
 def register_page(base=None):
     body = """
 <div class="auth-wrap"><div class="auth-card">
-  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏 Chat">
+  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏通讯">
   <h1 class="auth-title">注册账号</h1>
   <p class="auth-sub">需要邮箱验证</p>
   <form id="form">
@@ -497,7 +507,7 @@ def register_page(base=None):
   <div class="auth-foot"><a href="__BASE__/login">已有账号，去登录</a><span></span></div>
 </div></div>
 """.replace("__BASE__", config.BASE or "" if base is None else base)
-    return _doc("注册 · 心夏 Chat", body, extra_js=REGISTER_JS, base=base)
+    return _doc("注册 · 心夏通讯", body, extra_js=REGISTER_JS, base=base)
 
 
 RECOVER_JS = """
@@ -576,7 +586,7 @@ formB.addEventListener('submit', async (e) => {
 def recover_page(base=None):
     body = """
 <div class="auth-wrap"><div class="auth-card">
-  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏 Chat">
+  <img class="auth-logo" src="__BASE__/static/icon.png" alt="心夏通讯">
   <h1 class="auth-title">找回</h1>
   <p class="auth-sub">通过邮箱验证</p>
   <div class="code-row" style="margin-bottom:14px">
@@ -606,7 +616,7 @@ def recover_page(base=None):
   <div class="auth-foot"><a href="__BASE__/login">返回登录</a><a href="__BASE__/register">注册新账号</a></div>
 </div></div>
 """.replace("__BASE__", config.BASE or "" if base is None else base)
-    return _doc("找回账号 · 心夏 Chat", body, extra_css=".code-btn.on{background:#f4e8d4;border-color:#9ad9b4;color:#83582c}", extra_js=RECOVER_JS, base=base)
+    return _doc("找回账号 · 心夏通讯", body, extra_css=".code-btn.on{background:#f4e8d4;border-color:#9ad9b4;color:#83582c}", extra_js=RECOVER_JS, base=base)
 
 
 # ================================================================ 主界面
@@ -662,7 +672,7 @@ APP_BODY = """<div class="app" id="app">
       <div class="profile-id" id="drawer-id"></div>
     </div>
     <nav class="drawer-nav" id="drawer-nav"></nav>
-    <div class="drawer-foot">Kokona Chat · 轻量版</div>
+    <div class="drawer-foot">心夏通讯</div>
   </aside>
 </div>
 <input type="file" id="img-file" accept="image/*" hidden>
@@ -1380,6 +1390,7 @@ async function sendSticker(id) {
 
 let pressTimer = null;
 let longPressed = false;
+let menuOpenedAt = 0;
 
 function bindLongPress(el, fn) {
   el.addEventListener('pointerdown', (ev) => {
@@ -1460,26 +1471,55 @@ function openViewImage(src) {
   openSheet(null, '<div class="view-wrap"><img src="' + esc(src) + '" alt=""></div>', '');
 }
 
+function closeMsgMenu() {
+  $$('.msg-menu').forEach((el) => el.remove());
+}
+
+/** 长按气泡：贴着气泡弹出的小菜单，微信那套。 */
 function openMsgMenu(mid) {
   const m = msgById(mid);
   if (!m) return;
-  const rows = [];
-  if (canRecall(m)) rows.push('<div class="item" data-act="recall-msg" data-id="' + m.id + '"><div class="txt"><div class="t1">撤回</div></div></div>');
-  rows.push('<div class="item" data-act="hide-msg" data-id="' + m.id + '"><div class="txt"><div class="t1">删除（只删我这边）</div></div></div>');
-  if (m.kind === 'image' && m.media && m.media.id) {
-    rows.push('<div class="item" data-act="save-sticker" data-id="' + m.media.id + '"><div class="txt"><div class="t1">存为表情包</div></div></div>');
-  }
-  openSheet('消息', '<div class="card" style="margin:0">' + rows.join('') + '</div>', '');
+  const row = document.querySelector('.row[data-mid="' + m.id + '"]');
+  if (!row) return;
+  closeMsgMenu();
+
+  const items = [];
+  if (canRecall(m)) items.push(['recall-msg', '撤回', m.id]);
+  items.push(['hide-msg', '删除', m.id]);
+  if (m.kind === 'image' && m.media && m.media.id) items.push(['save-sticker', '存表情', m.media.id]);
+
+  const box = document.createElement('div');
+  box.className = 'msg-menu';
+  box.innerHTML = items.map((it) => '<button data-act="' + it[0] + '" data-id="' + it[2] + '">'
+    + it[1] + '</button>').join('') + '<i class="caret"></i>';
+  document.body.appendChild(box);
+
+  const bubble = row.querySelector('.bubble') || row;
+  const b = bubble.getBoundingClientRect();
+  const r = box.getBoundingClientRect();
+  const pad = 8;
+  let left = b.left + b.width / 2 - r.width / 2;
+  left = Math.min(Math.max(left, pad), window.innerWidth - r.width - pad);
+  let top = b.top - r.height - 9;
+  let below = false;
+  if (top < pad) { top = b.bottom + 9; below = true; }
+  box.classList.toggle('below', below);
+  box.style.left = left + 'px';
+  box.style.top = top + 'px';
+  const cx = Math.min(Math.max(b.left + b.width / 2 - left, 16), r.width - 16);
+  box.style.setProperty('--caret', cx + 'px');
+
+  menuOpenedAt = Date.now();
 }
 
 async function recallMsg(id) {
-  document.querySelectorAll('.mask').forEach((x) => x.remove());
+  closeMsgMenu();
   try { await api('/api/messages/' + id + '/recall', 'POST', {}); }
   catch (e) { toast(e.message); }
 }
 
 async function hideMsg(id) {
-  document.querySelectorAll('.mask').forEach((x) => x.remove());
+  closeMsgMenu();
   try {
     await api('/api/messages/' + id + '/hide', 'POST', {});
     S.msgs = S.msgs.filter((m) => Number(m.id) !== Number(id));
@@ -1489,10 +1529,10 @@ async function hideMsg(id) {
 }
 
 async function saveSticker(mediaId) {
-  document.querySelectorAll('.mask').forEach((x) => x.remove());
+  closeMsgMenu();
   try {
     const d = await api('/api/stickers', 'POST', { media_id: Number(mediaId) });
-    toast('已存为表情（' + d.used + '）');
+    toast('已存表情 ' + d.used);
   } catch (e) { toast(e.message); }
 }
 
@@ -1773,7 +1813,7 @@ function chatSetting() {
       + '<div class="card" style="margin:0 14px 14px">' + memberRows + '</div>'
 
       + (S.me.is_admin
-        ? '<div class="set-group-head">消息留存（网站管理员）</div>'
+        ? '<div class="set-group-head">消息留存</div>'
           + '<div class="mini-pw"><input id="ghist-in" type="number" value="'
           + (conv.history_max || 200) + '"><button class="btn" data-act="save-ghist">保存</button></div>'
           + '<div class="set-note">200 / 300 / 500 / 1000，只影响之后的消息。</div>'
@@ -1909,7 +1949,7 @@ function changePassword() {
   openSheet('修改密码',
     '<div class="mini-form">'
     + '<input id="old-pw" type="password" placeholder="原密码" autocomplete="current-password">'
-    + '<input id="new-pw" type="password" placeholder="新密码（≥6 位）" autocomplete="new-password">'
+    + '<input id="new-pw" type="password" placeholder="新密码，至少 6 位" autocomplete="new-password">'
     + '<input id="new-pw2" type="password" placeholder="再输一次新密码" autocomplete="new-password">'
     + '<button class="btn" data-act="save-pw">确定修改</button></div>', '');
 }
@@ -2133,8 +2173,17 @@ async function newGroup() {
 document.addEventListener('click', (e) => {
   const row = e.target.closest('.row[data-ts]');
   if (!row) return;
+  // 长按刚弹完菜单，别顺手把时间也弹出来
+  if (Date.now() - menuOpenedAt < 600) return;
   toast(fmtFull(Number(row.getAttribute('data-ts'))));
 });
+
+/* 菜单外点一下、列表一滚，就收起来 */
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('.msg-menu')) closeMsgMenu();
+}, true);
+document.addEventListener('scroll', closeMsgMenu, true);
+window.addEventListener('resize', closeMsgMenu);
 
 /* 触摸按压态用 class 控制，避免移动端 :active 黏在那一行 */
 document.addEventListener('pointerdown', (e) => {
@@ -2496,7 +2545,7 @@ def app_page(user, store=None, hub=None, base=None):
     }
     js = "const ME=" + j(me) + ";\n" + APP_JS + "\n"
     body = APP_BODY.replace("__BASE__", base or "")
-    return _doc("心夏 Chat", body, extra_js=js, base=base)
+    return _doc("心夏通讯", body, extra_js=js, base=base)
 
 
 # ================================================================ 管理后台
@@ -2684,8 +2733,8 @@ def admin_page(user, store=None, hub=None, base=None):
   <h3>新建账号</h3>
   <div class="form-card">
     <input id="nu-name" placeholder="用户名">
-    <input id="nu-pass" type="password" placeholder="密码（≥6 位）">
-    <input id="nu-email" type="email" placeholder="邮箱（可选）">
+    <input id="nu-pass" type="password" placeholder="密码，至少 6 位">
+    <input id="nu-email" type="email" placeholder="邮箱，可留空">
     <select id="nu-role" style="padding:10px 12px;border:1px solid #eadfcc;border-radius:9px;background:#fbf7ef">
       <option value="user">普通用户</option>
       <option value="admin">管理员</option>
@@ -2714,4 +2763,4 @@ def admin_page(user, store=None, hub=None, base=None):
         "display_name": user["display_name"] or user["username"],
         "role": user["role"],
     }) + ";\n" + ADMIN_JS + "\n"
-    return _doc("管理后台 · 心夏 Chat", body, extra_css=ADMIN_CSS, extra_js=js, base=base)
+    return _doc("管理后台 · 心夏通讯", body, extra_css=ADMIN_CSS, extra_js=js, base=base)

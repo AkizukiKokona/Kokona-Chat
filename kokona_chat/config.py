@@ -23,7 +23,7 @@ ADMIN_USERNAME = os.environ.get("CHAT_ADMIN_USER", "akizukikokona")
 
 # 邮件
 MAIL_FROM = os.environ.get("CHAT_MAIL_FROM", "noreply@akizukikokona.com")
-MAIL_NAME = os.environ.get("CHAT_MAIL_NAME", "心夏 Chat")
+MAIL_NAME = os.environ.get("CHAT_MAIL_NAME", "心夏通讯")
 # 邮件头部那行副标题，也是站点顺手用的 slogan
 SLOGAN = os.environ.get("CHAT_SLOGAN", "轻量 · 安静 · 只聊天")
 # 邮件页脚、找回入口等处引用的站点地址（不带末尾斜杠）
