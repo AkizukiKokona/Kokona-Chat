@@ -25,3 +25,6 @@ settings.local.*
 .testdata/
 .ck
 .ck2
+
+# 手工备份
+*.bak-*
