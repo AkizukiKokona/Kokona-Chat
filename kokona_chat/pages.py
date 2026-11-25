@@ -204,9 +204,9 @@ a{color:var(--brand-d);text-decoration:none}
 .crop-box img{position:absolute;left:50%;top:50%;transform-origin:center;will-change:transform;
   -webkit-user-drag:none;user-select:none;pointer-events:none}
 .crop-mask{position:absolute;inset:0;border-radius:14px;pointer-events:none;
-  box-shadow:0 0 0 999px rgba(0,0,0,.55) inset;border:2px solid rgba(255,255,255,.75)}
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
 .crop-ring{position:absolute;left:50%;top:50%;width:78%;aspect-ratio:1/1;transform:translate(-50%,-50%);
-  border:2px dashed rgba(255,255,255,.85);border-radius:50%;pointer-events:none}
+  border:2px dashed rgba(255,255,255,.7);border-radius:50%;pointer-events:none}
 .crop-ctrl{display:flex;align-items:center;gap:10px;padding:0 18px 12px;font-size:12px;color:var(--sub)}
 .crop-ctrl input[type=range]{flex:1;accent-color:var(--brand)}
 
