@@ -131,6 +131,10 @@ def remove_member(conv_id, user_id):
     )
 
 
+def set_conv_avatar(conv_id, stored):
+    db.run("UPDATE conversations SET avatar = ? WHERE id = ?", (stored, int(conv_id)))
+
+
 def rename_conv(conv_id, title):
     db.run(
         "UPDATE conversations SET title = ? WHERE id = ?",
@@ -168,6 +172,8 @@ def list_conversations(user_id):
             "kind": conv["kind"],
             "title": conv["title"],
             "alias": conv["alias"] or "",
+            "avatar": conv["avatar"] or "",
+            "created_by": conv["created_by"],
             "last_at": conv["last_at"],
         }
         last = db.qone(
@@ -193,6 +199,21 @@ def list_conversations(user_id):
         item["unread"] = _unread_count(conv["id"], user_id, item["last"])
         out.append(item)
     return out
+
+
+def conv_notify_view(conv, user_id):
+    """通知用的标题和头像：私聊取对方（带备注），群聊取群名/群头像。"""
+    if conv["kind"] == "direct":
+        peer_id = _peer_of_direct(conv, user_id)
+        peer = db.qone("SELECT * FROM users WHERE id = ?", (peer_id,)) if peer_id else None
+        row = db.qone(
+            "SELECT alias FROM conversation_members WHERE conv_id = ? AND user_id = ?",
+            (int(conv["id"]), int(user_id)),
+        )
+        alias = (row["alias"] if row is not None else "") or ""
+        title = alias.strip() or ((peer["display_name"] or peer["username"]) if peer else "新消息")
+        return title, (peer["avatar"] if peer is not None else "") or ""
+    return (conv["title"] or "新消息"), (conv["avatar"] or "")
 
 
 def _unread_count(conv_id, user_id, last):

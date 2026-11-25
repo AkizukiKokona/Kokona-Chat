@@ -28,6 +28,8 @@ MAIL_NAME = os.environ.get("CHAT_MAIL_NAME", "心夏 Chat")
 SLOGAN = os.environ.get("CHAT_SLOGAN", "轻量 · 安静 · 只聊天")
 # 邮件页脚、找回入口等处引用的站点地址（不带末尾斜杠）
 SITE_URL = os.environ.get("CHAT_SITE_URL", "https://chat.akizukikokona.com").rstrip("/")
+# Web Push：VAPID 的 sub 字段，一般填站长邮箱
+PUSH_SUBJECT = os.environ.get("CHAT_PUSH_SUBJECT", "mailto:admin@akizukikokona.com")
 SMTP_HOST = os.environ.get("CHAT_SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("CHAT_SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("CHAT_SMTP_USER", "")

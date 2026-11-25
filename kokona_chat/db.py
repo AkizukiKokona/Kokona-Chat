@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   title      TEXT NOT NULL DEFAULT '',
   dm_key     TEXT,                                   -- direct 会话唯一键 "小id:大id"
   created_by INTEGER,
+  avatar     TEXT NOT NULL DEFAULT '',               -- gv:<文件名>，群头像
   created_at INTEGER NOT NULL,
   last_at    INTEGER NOT NULL DEFAULT 0              -- 方便按最近活跃排序
 );
@@ -108,6 +109,15 @@ CREATE TABLE IF NOT EXISTS email_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_codes_email ON email_codes(email, purpose, created_at);
 
+CREATE TABLE IF NOT EXISTS push_subs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL,
+  endpoint   TEXT NOT NULL UNIQUE,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS mail_log (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   to_addr    TEXT NOT NULL,
@@ -171,6 +181,8 @@ def _migrate():
         run("ALTER TABLE conversations ADD COLUMN dm_key TEXT")
     if "last_at" not in cols:
         run("ALTER TABLE conversations ADD COLUMN last_at INTEGER NOT NULL DEFAULT 0")
+    if "avatar" not in cols:
+        run("ALTER TABLE conversations ADD COLUMN avatar TEXT NOT NULL DEFAULT ''")
     run(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_dm "
         "ON conversations(dm_key) WHERE dm_key IS NOT NULL"

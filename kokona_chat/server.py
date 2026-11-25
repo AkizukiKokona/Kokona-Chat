@@ -13,7 +13,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import auth, config, db, hub, mailer, pages, store, wskit
+from . import auth, config, db, hub, mailer, pages, push, store, wskit
 
 HUB = hub.Hub()
 
@@ -21,6 +21,7 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 # 用户头像单独放数据目录，跟只读的代码目录分开
 AVATAR_DIR = os.path.join(config.DATA_DIR, "avatars")
 COVER_DIR = os.path.join(config.DATA_DIR, "covers")
+GROUP_DIR = os.path.join(config.DATA_DIR, "groups")
 MAX_AVATAR_BYTES = 400 * 1024
 MAX_COVER_BYTES = 900 * 1024
 STATIC_MIME = {
@@ -159,7 +160,7 @@ def api_profile(c):
 
 def _drop_upload_file(stored, folder=AVATAR_DIR):
     """删掉被替换下来的图片，别把磁盘堆满。"""
-    for prefix in ("av:", "cv:"):
+    for prefix in ("av:", "cv:", "gv:"):
         if stored.startswith(prefix):
             name = stored[len(prefix):]
             if name == "" or "/" in name or ".." in name:
@@ -182,7 +183,7 @@ def _save_upload(raw, user_id, kind):
     except Exception:
         raise ApiError("图片数据损坏")
 
-    is_avatar = kind == "avatar"
+    is_avatar = kind in ("avatar", "group")
     limit = MAX_AVATAR_BYTES if is_avatar else MAX_COVER_BYTES
     if len(data) < 64:
         raise ApiError("图片太小")
@@ -193,12 +194,14 @@ def _save_upload(raw, user_id, kind):
     if fmt == "png" and data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ApiError("不是有效的 png")
 
-    folder = AVATAR_DIR if is_avatar else COVER_DIR
+    folder = {"avatar": AVATAR_DIR, "cover": COVER_DIR, "group": GROUP_DIR}[kind]
+    tag = {"avatar": "av:", "cover": "cv:", "group": "gv:"}[kind]
+    stem = {"avatar": "u", "cover": "b", "group": "g"}[kind]
     os.makedirs(folder, exist_ok=True)
-    name = "%s%d-%s.%s" % ("u" if is_avatar else "b", int(user_id), secrets.token_hex(5), fmt)
+    name = "%s%d-%s.%s" % (stem, int(user_id), secrets.token_hex(5), fmt)
     with open(os.path.join(folder, name), "wb") as fh:
         fh.write(data)
-    return ("av:" if is_avatar else "cv:") + name
+    return tag + name
 
 
 @route("POST", "/api/avatar")
@@ -410,6 +413,7 @@ def api_conversation(c):
     return ok(
         conversation={
             "id": conv["id"], "kind": conv["kind"], "title": conv["title"],
+            "avatar": conv["avatar"] or "",
             "created_by": conv["created_by"], "peer": peer,
         },
         members=mem,
@@ -449,6 +453,7 @@ def api_send(c):
         raise ApiError("消息不能为空")
     store.mark_read(cid, user["id"], msg["id"])
     c.notify_conv(cid, {"type": "message", "conv_id": cid, "message": msg})
+    push_notify(cid, msg)
     return ok(message=msg)
 
 
@@ -613,6 +618,106 @@ def api_search(c):
         item["is_self"] = int(r["id"]) == int(user["id"])
         out.append(item)
     return ok(users=out)
+
+
+# ==================================================================== 群头像 / 推送
+
+def _icon_url(stored):
+    """把 "av:x" / "gv:x" 换成通知里能直接加载的绝对地址。"""
+    val = str(stored or "")
+    if val.startswith("av:"):
+        return config.SITE_URL + "/avatar/" + val[3:]
+    if val.startswith("gv:"):
+        return config.SITE_URL + "/gavatar/" + val[3:]
+    return config.SITE_URL + "/static/icon.png"
+
+
+def push_notify(cid, msg):
+    """新消息 → 给其他成员排队发一条通知。任何异常都不该影响发消息。"""
+    try:
+        if msg is None or not push.HAVE_CRYPTO:
+            return
+        conv = store.conv_row(cid)
+        if conv is None or conv["kind"] == "legacy":
+            return
+        sender_id = int(msg.get("sender_id") or 0)
+        body = str(msg.get("body") or "")[:120]
+        for uid in store.member_ids(cid):
+            if uid == sender_id:
+                continue
+            if sender_id and store.blocked_by(uid, sender_id):
+                continue
+            title, icon = store.conv_notify_view(conv, uid)
+            push.queue(uid, cid, title, body, _icon_url(icon),
+                       config.SITE_URL + "/?conv=%d" % int(cid), "conv-%d" % int(cid))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+@route("POST", "/api/conversations/<cid>/avatar")
+def api_conv_avatar(c):
+    """群头像：只有创建者能换。"""
+    user = c.need_login()
+    cid = int(c.params["cid"])
+    conv = store.conv_row(cid)
+    if conv is None or not store.is_member(cid, user["id"]):
+        raise ApiError("会话不存在", 404)
+    if conv["kind"] != "group":
+        raise ApiError("只有群聊能换头像")
+    if int(conv["created_by"] or 0) != int(user["id"]):
+        raise ApiError("只有群主能换群头像", 403)
+    stored = _save_upload(c.arg("data"), cid, "group")
+    old = str(conv["avatar"] or "")
+    db.run("UPDATE conversations SET avatar = ? WHERE id = ?", (stored, cid))
+    if old and old != stored:
+        _drop_upload_file(old, GROUP_DIR)
+    c.notify_conv(cid, {"type": "conversation", "conv_id": cid})
+    return ok(conv_id=cid, avatar=stored)
+
+
+@route("GET", "/api/push/key")
+def api_push_key(c):
+    c.need_login()
+    key = push.public_key()
+    return ok(key=key, enabled=bool(key))
+
+
+@route("POST", "/api/push/subscribe")
+def api_push_subscribe(c):
+    user = c.need_login()
+    sub = c.arg("subscription") or {}
+    endpoint = str(sub.get("endpoint") or "").strip()
+    keys = sub.get("keys") or {}
+    p256dh = str(keys.get("p256dh") or "").strip()
+    auth_key = str(keys.get("auth") or "").strip()
+    if not endpoint.startswith("https://") or not p256dh or not auth_key:
+        raise ApiError("订阅信息不完整")
+    db.run(
+        "INSERT INTO push_subs (user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, "
+        "p256dh = excluded.p256dh, auth = excluded.auth",
+        (int(user["id"]), endpoint[:600], p256dh[:200], auth_key[:100], db.now()),
+    )
+    return ok(count=db.qone("SELECT COUNT(*) AS n FROM push_subs WHERE user_id = ?", (user["id"],))["n"])
+
+
+@route("POST", "/api/push/unsubscribe")
+def api_push_unsubscribe(c):
+    user = c.need_login()
+    endpoint = str(c.arg("endpoint") or "").strip()
+    if endpoint:
+        db.run("DELETE FROM push_subs WHERE user_id = ? AND endpoint = ?", (int(user["id"]), endpoint))
+    else:
+        db.run("DELETE FROM push_subs WHERE user_id = ?", (int(user["id"]),))
+    return ok()
+
+
+@route("POST", "/api/push/test")
+def api_push_test(c):
+    user = c.need_login()
+    push.queue(int(user["id"]), 0, config.MAIL_NAME, "测试通知，看到就说明推送通了。",
+               _icon_url(""), config.SITE_URL + "/", "kokona-test")
+    return ok()
 
 
 # ==================================================================== 子账号
@@ -982,6 +1087,23 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
+    def _service_worker(self):
+        full = os.path.join(STATIC_DIR, "sw.js")
+        try:
+            with open(full, "rb") as fh:
+                data = fh.read()
+        except OSError:
+            self._send_headers(404, "text/plain; charset=utf-8", 0)
+            return
+        self._send_headers(
+            200, "application/javascript; charset=utf-8", len(data),
+            [("Cache-Control", "no-cache"), ("Service-Worker-Allowed", "/")],
+        )
+        try:
+            self.wfile.write(data)
+        except Exception:
+            pass
+
     def _avatar(self, name, folder=None):
         if "/" in name or ".." in name or name == "":
             self._send_headers(404, "text/plain; charset=utf-8", 0)
@@ -1079,6 +1201,16 @@ class Handler(BaseHTTPRequestHandler):
             # 资料卡封面
             if path.startswith("/cover/"):
                 self._avatar(path[len("/cover/"):], folder=COVER_DIR)
+                return
+
+            # 群头像
+            if path.startswith("/gavatar/"):
+                self._avatar(path[len("/gavatar/"):], folder=GROUP_DIR)
+                return
+
+            # Service Worker 必须在根路径，才能接管整站
+            if path == "/sw.js":
+                self._service_worker()
                 return
 
             # API
@@ -1265,6 +1397,7 @@ def _handle_ws_message(user, text, conn=None):
         store.mark_read(cid, user["id"], m["id"])
         # 广播会把这条包成 pkn.message 推回自己，所以不再单独回执
         HUB.push_conversation(store.member_ids(cid), {"type": "message", "conv_id": cid, "message": m})
+        push_notify(cid, m)
         return []
 
     if action == "pkn.history":
@@ -1313,6 +1446,7 @@ def _handle_ws_message(user, text, conn=None):
         store.mark_read(cid, user["id"], m["id"])
         # 广播会把这一帧推回给自己，所以不再额外回 sent，避免客户端收到两帧
         HUB.push_conversation(store.member_ids(cid), {"type": "message", "conv_id": cid, "message": m})
+        push_notify(cid, m)
         return []
 
     if action == "open_dm":

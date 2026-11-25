@@ -206,6 +206,12 @@ a{color:var(--brand-d);text-decoration:none}
 .set-group .item{border-bottom:1px solid var(--line)}
 .set-group .item:last-child{border-bottom:0}
 .set-group-head{padding:12px 16px 8px;font-size:12px;font-weight:600;color:var(--sub)}
+.gset-head{display:flex;align-items:center;gap:12px;padding:16px 16px;border-bottom:1px solid var(--line);
+  margin-bottom:12px}
+.gset-head .avatar.lg{width:56px;height:56px;border-radius:14px;font-size:20px;flex:0 0 auto}
+.gset-info{flex:1;min-width:0}
+.gset-name{font-size:16px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gset-sub{font-size:12px;color:var(--sub);margin-top:3px}
 .set-note{padding:0 4px 10px;font-size:12px;color:var(--sub);line-height:1.6}
 .set-note code{background:#f6ecdb;color:var(--brand-d);padding:1px 5px;border-radius:4px;font-size:11px}
 .mini-pw{display:flex;gap:8px;padding:10px 14px 12px;align-items:center}
@@ -647,6 +653,104 @@ async function api(path, method, body) {
   return d;
 }
 
+/* ---------------- 浏览器推送 ---------------- */
+
+const PUSH = { key: '', supported: false, perm: 'default', sub: null };
+
+function urlB64ToU8(base64) {
+  const s = (base64 + '='.repeat((4 - base64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(s);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function initPush() {
+  PUSH.supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+  PUSH.perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  if (!PUSH.supported) return;
+  try {
+    await navigator.serviceWorker.register(BASE + '/sw.js');
+    const d = await api('/api/push/key');
+    PUSH.key = d.key || '';
+    if (!PUSH.key) { PUSH.supported = false; return; }
+    const reg = await navigator.serviceWorker.ready;
+    PUSH.sub = await reg.pushManager.getSubscription();
+    if (PUSH.sub) {
+      // 换账号登录时，把同一个订阅重新挂到当前账号上
+      api('/api/push/subscribe', 'POST', { subscription: PUSH.sub.toJSON() }).catch(() => {});
+    }
+  } catch (e) { PUSH.supported = false; }
+}
+
+async function refreshPushState() {
+  if (!('Notification' in window)) { PUSH.perm = 'unsupported'; return; }
+  PUSH.perm = Notification.permission;
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    PUSH.sub = reg ? await reg.pushManager.getSubscription() : null;
+  } catch (e) { PUSH.sub = null; }
+}
+
+async function pushEnable() {
+  if (!PUSH.supported) { toast('这个浏览器不支持推送'); return; }
+  if (PUSH.perm === 'denied') { toast('通知被浏览器拦了，去站点设置里放开'); return; }
+  const perm = await Notification.requestPermission();
+  PUSH.perm = perm;
+  if (perm !== 'granted') { toast('没有拿到通知权限'); return; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true, applicationServerKey: urlB64ToU8(PUSH.key),
+      });
+    }
+    PUSH.sub = sub;
+    await api('/api/push/subscribe', 'POST', { subscription: sub.toJSON() });
+    toast('通知已开启');
+  } catch (e) { toast('开启失败：' + (e.message || '未知错误')); }
+  if (S.view === 'settings') openSettings();
+}
+
+async function pushDisable() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (sub) {
+      await api('/api/push/unsubscribe', 'POST', { endpoint: sub.endpoint }).catch(() => {});
+      await sub.unsubscribe().catch(() => {});
+    }
+    PUSH.sub = null;
+    toast('通知已关闭');
+  } catch (e) { toast('关闭失败了'); }
+  if (S.view === 'settings') openSettings();
+}
+
+async function pushTest() {
+  try { await api('/api/push/test', 'POST', {}); toast('已发一条测试通知'); }
+  catch (e) { toast(e.message); }
+}
+
+function pushRow() {
+  if (!PUSH.supported) {
+    return '<div class="item"><div class="txt"><div class="t1">浏览器通知</div>'
+      + '<div class="t2">这个浏览器不支持；iPhone 要先「添加到主屏幕」</div></div></div>';
+  }
+  let hint = '开启后关掉页面也能收到新消息';
+  if (PUSH.perm === 'denied') hint = '被浏览器拦了，去站点设置里放开';
+  else if (PUSH.sub) hint = '已开启，关掉页面也能收到';
+  if (PUSH.sub) {
+    return '<div class="item" data-act="push-off"><div class="txt"><div class="t1">浏览器通知</div>'
+      + '<div class="t2">' + hint + '</div></div><span class="arrow">关闭</span></div>'
+      + '<div class="item" data-act="push-test"><div class="txt"><div class="t1">发一条测试通知</div>'
+      + '</div><span class="arrow">›</span></div>';
+  }
+  return '<div class="item" data-act="push-on"><div class="txt"><div class="t1">浏览器通知</div>'
+    + '<div class="t2">' + hint + '</div></div><span class="arrow">›</span></div>';
+}
+
 function fmtClock(ts) {
   const d = new Date(ts * 1000), n = new Date();
   const hm = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
@@ -730,6 +834,18 @@ function avatar(u, cls) {
   return '<div class="avatar ' + cls + '">' + esc(String(name).slice(0, 1)) + '</div>';
 }
 
+/** 会话头像：群有 gv: 就贴图，否则用首字；pkn 用站点图标。 */
+function convAvatar(c, cls) {
+  const box = 'avatar g ' + (cls || '');
+  if (!c) return '<div class="' + box + '">群</div>';
+  if (c.kind === 'pkn') return '<div class="avatar ' + (cls || '') + '"><img src="' + esc(ICON) + '" alt=""></div>';
+  const a = String(c.avatar || '');
+  if (a.indexOf('gv:') === 0) {
+    return '<div class="' + box + '"><img src="' + esc(BASE + '/gavatar/' + encodeURIComponent(a.slice(3))) + '" alt=""></div>';
+  }
+  return '<div class="' + box + '">' + esc(String(c.title || '群').slice(0, 1)) + '</div>';
+}
+
 function displayName(u) {
   return u ? (u.display_name || u.username) : '未知';
 }
@@ -805,11 +921,7 @@ function renderConvs() {
   }
   box.innerHTML = list.map((c) => {
     const last = c.last ? String(c.last.body || '').slice(0, 40) : (c.kind === 'group' ? '群聊已创建' : '开始聊天吧');
-    const av = c.kind === 'direct'
-      ? avatar(c.peer)
-      : (c.kind === 'pkn'
-        ? '<div class="avatar"><img src="' + esc(ICON) + '" alt=""></div>'
-        : '<div class="avatar g">' + esc(String(c.title || '群').slice(0, 1)) + '</div>');
+    const av = c.kind === 'direct' ? avatar(c.peer) : convAvatar(c);
     const badge = c.unread > 0 ? '<span class="badge">' + (c.unread > 99 ? '99+' : c.unread) + '</span>' : '';
     return '<div class="conv' + (S.cur && S.cur.id === c.id ? ' on' : '') + '" data-act="open-conv" data-id="' + c.id + '">'
       + av + '<div class="conv-body"><div class="conv-top"><span class="conv-name">' + esc(c.title)
@@ -1000,7 +1112,7 @@ function showContacts() {
   const groups = S.convs.filter((c) => c.kind === 'group');
   const groupRows = groups.length
     ? groups.map((g) => '<div class="item" data-act="open-conv" data-id="' + g.id + '">'
-        + '<div class="avatar g sm">' + esc(String(g.title || '群').slice(0, 1)) + '</div>'
+        + convAvatar(g, 'sm')
         + '<div class="txt"><div class="t1">' + esc(g.title) + '</div><div class="t2">'
         + (g.member_count || 0) + ' 人</div></div><span class="arrow">›</span></div>').join('')
     : '<div class="empty">还没有群聊</div>';
@@ -1135,8 +1247,16 @@ function chatSetting() {
       + '删除这个聊天</div></div></div>'
       + '</div>', '');
   } else {
+    const owner = Number(conv.created_by) === Number(S.me.id);
     openSheet('群聊设置',
-      '<div class="mini-form"><label>群名</label>'
+      '<div class="gset-head">' + convAvatar(conv, 'lg')
+      + '<div class="gset-info"><div class="gset-name">' + esc(conv.title) + '</div>'
+      + '<div class="gset-sub">' + ((conv.members || []).length) + ' 人'
+      + (owner ? ' · 你是群主' : '') + '</div></div>'
+      + (owner ? '<button class="code-btn" data-act="pick-group-avatar">换头像</button>' : '')
+      + '</div>'
+      + (owner ? '<input type="file" id="gv-file" accept="image/*" hidden>' : '')
+      + '<div class="mini-form"><label>群名</label>'
       + '<input id="gname-in" value="' + esc(conv.title) + '">'
       + '<button class="btn" data-act="save-gname">保存群名</button></div>'
       + '<div class="card" style="margin:0 14px 14px">'
@@ -1147,6 +1267,8 @@ function chatSetting() {
       + '<div class="card" style="margin:0 14px 14px">'
       + '<div class="item" data-act="del-conv"><div class="txt"><div class="t1" style="color:#c1503c">'
       + '解散 / 退出群聊</div></div></div></div>', '');
+    const gv = $('#gv-file');
+    if (gv) gv.addEventListener('change', onGroupAvatarPicked);
   }
 }
 
@@ -1156,6 +1278,7 @@ function chatSetting() {
 async function openSettings() {
   S.view = 'settings';
   await loadSubs();
+  await refreshPushState();
   renderSettings();
 }
 
@@ -1216,6 +1339,7 @@ function renderSettings() {
 
     + '<div class="set-group"><div class="set-group-head">WSS \u8d26\u53f7</div>' + wss + '</div>'
 
+    + '<div class="set-group"><div class="set-group-head">通知</div>' + pushRow() + '</div>'
     + '<div class="set-group"><div class="set-group-head">\u8d26\u53f7\u5b89\u5168</div>'
     + '<div class="item" data-act="password"><div class="txt"><div class="t1">\u4fee\u6539\u5bc6\u7801</div></div>'
     + '<span class="arrow">\u203a</span></div></div>'
@@ -1294,6 +1418,10 @@ function pickImage(handler) {
 
 const onAvatarPicked = pickImage((src) => openCropper(src, 'avatar'));
 const onCoverPicked = pickImage((src) => openCropper(src, 'cover'));
+const onGroupAvatarPicked = pickImage((src) => {
+  CROP.convId = S.cur ? S.cur.id : 0;
+  openCropper(src, 'group');
+});
 
 function cropApply() {
   if (!CROP.img) return;
@@ -1321,7 +1449,7 @@ function openCropper(src, mode) {
   const box = $('#crop-box'), img = $('#crop-img'), range = $('#crop-zoom');
   if (!box || !img || !range) return;
 
-  CROP.img = img; CROP.mode = cover ? 'cover' : 'avatar';
+  CROP.img = img; CROP.mode = cover ? 'cover' : (mode === 'group' ? 'group' : 'avatar');
   CROP.zoom = 1; CROP.x = 0; CROP.y = 0;
 
   const start = () => {
@@ -1364,7 +1492,8 @@ async function saveCrop() {
   const sw = CROP.bw / s, sh = CROP.bh / s;
   const sx = CROP.w / 2 - CROP.x / s - sw / 2;
   const sy = CROP.h / 2 - CROP.y / s - sh / 2;
-  const cover = CROP.mode === 'cover';
+  const mode = CROP.mode || 'avatar';
+  const cover = mode === 'cover';
   const outW = cover ? 720 : 256, outH = cover ? 480 : 256;
   const cv = document.createElement('canvas');
   cv.width = outW; cv.height = outH;
@@ -1375,6 +1504,16 @@ async function saveCrop() {
   let data = cv.toDataURL('image/webp', 0.86);
   if (data.indexOf('data:image/webp') !== 0) data = cv.toDataURL('image/png');
   try {
+    if (mode === 'group') {
+      const cid = CROP.convId || (S.cur ? S.cur.id : 0);
+      const g = await api('/api/conversations/' + cid + '/avatar', 'POST', { data: data });
+      if (S.cur && Number(S.cur.id) === Number(cid)) S.cur.avatar = g.avatar;
+      await loadConvs(true);
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      toast('群头像已更新');
+      chatSetting();
+      return;
+    }
     const d = await api(cover ? '/api/cover' : '/api/avatar', 'POST', { data: data });
     applyMe(d.user);
     document.querySelectorAll('.mask').forEach((m) => m.remove());
@@ -1483,6 +1622,10 @@ document.addEventListener('click', async (e) => {
     else if (act === 'drawer-profile') { closeDrawer(); openSettings(); }
     else if (act === 'pick-avatar') { const f = $('#av-file'); if (f) f.click(); }
     else if (act === 'pick-cover') { const f = $('#cover-file'); if (f) f.click(); }
+    else if (act === 'pick-group-avatar') { const f = $('#gv-file'); if (f) f.click(); }
+    else if (act === 'push-on') { await pushEnable(); }
+    else if (act === 'push-off') { await pushDisable(); }
+    else if (act === 'push-test') { await pushTest(); }
     else if (act === 'crop-save') { await saveCrop(); }
     else if (act === 'user-card') {
       let u = S.friends.find((x) => Number(x.id) === Number(id));
@@ -1690,7 +1833,15 @@ document.addEventListener('visibilitychange', () => {
   await loadFriends();
   await loadAnns();
   connectSSE();
+  initPush();
   setTimeout(popAnnouncement, 700);
+
+  // 通知点进来会带 ?conv=<id>，直接打开那条会话
+  const convParam = new URLSearchParams(location.search).get('conv');
+  if (convParam && /^\d+$/.test(convParam)) {
+    openConv(Number(convParam)).catch(() => {});
+    try { history.replaceState(null, '', BASE + '/'); } catch (e) {}
+  }
   if (window.innerWidth > 760) {
     $('#panel-view').classList.remove('hidden');
     $('#panel-view').innerHTML = '<div class="empty" style="padding-top:28vh">从左边选一个会话开始聊天</div>';

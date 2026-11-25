@@ -112,7 +112,27 @@ nginx -t && systemctl reload nginx
 - 可配项：`CHAT_MAIL_NAME`（产品名）、`CHAT_SLOGAN`（头部副标题）、
   `CHAT_SITE_URL`（页脚与隐藏预览里的站点地址）。
 
+## 群头像
+
+- 存在 `conversations.avatar`，值形如 `gv:<文件名>`，文件落 `data/groups/`，路由 `GET /gavatar/<名>`。
+- **只有群创建者（`conversations.created_by`）能换**；接口 `POST /api/conversations/<cid>/avatar`
+  对其他人返回 403「只有群主能换群头像」。群名仍然谁都能改（这是现状，别当 bug 改掉）。
+- 前端统一用 `convAvatar(c, cls)` 渲染群头像，别再手写首字 div。
+
+## 浏览器推送
+
+- `kokona_chat/push.py`：自实现 VAPID(ES256) + aes128gcm，依赖 `cryptography`（服务器 3.3 已自带）。
+  没装这个库时 `HAVE_CRYPTO=False`，接口自动降级、设置里的开关显示为不支持。
+- VAPID 密钥首次用到时生成，存 `data/vapid.json`（600）。**别删**，删了所有人的订阅都会失效。
+- `static/sw.js` 必须能从**站点根路径 `/sw.js`** 取到（scope 才是整站）；nginx 直接反代即可，
+  服务端专门加 `Service-Worker-Allowed: /` 和 `no-cache`。
+- 合并：同一用户同一会话 2 秒内的多条并成一条，正文变成 `[N条新消息]最新正文`。
+- 通知内容：标题=会话名（私聊取备注/对方昵称），图标=对方头像或群头像，点击打开 `/?conv=<id>`。
+- SW 行为：有**带焦点的窗口**时不弹（页面里已经能看见），`kokona-test` 例外，方便自测。
+- 限制：iOS 必须先把站点「添加到主屏幕」才有 Push；桌面 Chrome/Edge/Firefox 正常。
+
 ## 已知限制
+
 
 - **出站 25 被 VPS 上游封死**，自建 MTA 直投不可行。只能走 587/465 中继。
 - 发信走 `smtp.yeah.net:465`（SSL，授权码当密码），配置在 `/opt/kokona-im/.env`（600）。
