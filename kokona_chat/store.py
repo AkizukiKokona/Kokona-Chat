@@ -1,10 +1,12 @@
 """业务数据操作：会话、消息、好友、黑名单、公告。
 
 约定：
-- 云端每个会话只保留最近 config.HISTORY_MAX 条（默认 100），更早的直接删。
+- 每个会话按 conversations.history_max 留存，更早的直接删。
 - 私聊会话靠 conversations.dm_key（"小id:大id"）保证唯一。
 - 子账号（is_sub=1）只能跟自己的主账号私聊。
 """
+
+import json
 
 from . import config, db
 
@@ -340,9 +342,35 @@ def upsert_media(hash_value, size, width, height):
     return db.qone("SELECT * FROM media WHERE id = ?", (int(cur.lastrowid),))
 
 
+def quote_brief(msg_id, conv_id):
+    """被引用消息的快照；跨会话或已删就当没有。"""
+    if not msg_id:
+        return None
+    r = db.qone(
+        "SELECT m.*, u.username, u.display_name, u.avatar, u.cover, u.is_sub, u.role "
+        "FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.id = ?",
+        (int(msg_id),),
+    )
+    if r is None or int(r["conv_id"]) != int(conv_id):
+        return None
+    return {
+        "id": r["id"],
+        "sender_id": r["sender_id"] or 0,
+        "kind": _opt(r, "kind") or "text",
+        "body": (r["body"] or "")[:200],
+        "recalled": int(_opt(r, "recalled") or 0),
+        "sender": user_brief(r) if r["username"] else None,
+    }
+
+
 def message_item(r):
     """统一的消息形状：撤回后只留占位，不带正文和图片。"""
     recalled = int(_opt(r, "recalled") or 0) == 1
+    raw_mentions = _opt(r, "mentions") or "[]"
+    try:
+        mentions = [int(x) for x in json.loads(raw_mentions)]
+    except Exception:
+        mentions = []
     item = {
         "id": r["id"],
         "conv_id": r["conv_id"],
@@ -350,6 +378,8 @@ def message_item(r):
         "kind": "text" if recalled else (_opt(r, "kind") or "text"),
         "body": "" if recalled else (r["body"] or ""),
         "media": None,
+        "quote": None if recalled else quote_brief(_opt(r, "quote_id"), r["conv_id"]),
+        "mentions": [] if recalled else mentions,
         "recalled": 1 if recalled else 0,
         "recall_by": int(_opt(r, "recall_by") or 0),
         "created_at": r["created_at"],
@@ -360,19 +390,38 @@ def message_item(r):
     return item
 
 
-def append_message(conv_id, sender_id, body, kind="text", media_id=None):
+def scan_mentions(conv, body):
+    """群聊里按成员显示名/用户名扫 @，返回被点到的用户 id。"""
+    if conv is None or conv["kind"] != "group" or not body:
+        return []
+    hits = []
+    for m in members(int(conv["id"])):
+        for name in (m["display_name"], m["username"]):
+            if name and ("@" + name) in body:
+                hits.append(int(m["id"]))
+                break
+    return hits
+
+
+def append_message(conv_id, sender_id, body, kind="text", media_id=None, quote_id=None):
     body = str(body or "").strip()[:4000]
     if kind == "text" and not body:
         return None
     if kind == "image" and not media_id:
         return None
+    conv = conv_row(conv_id)
+    mentions = scan_mentions(conv, body) if kind != "image" or body else []
+    if quote_id and quote_brief(quote_id, conv_id) is None:
+        quote_id = None
     t = db.now()
     cur = db.run(
-        "INSERT INTO messages (conv_id, sender_id, body, kind, media_id, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO messages (conv_id, sender_id, body, kind, media_id, quote_id, mentions, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (int(conv_id), None if sender_id is None else int(sender_id), body,
          "image" if kind == "image" else "text",
-         int(media_id) if media_id else None, t),
+         int(media_id) if media_id else None,
+         int(quote_id) if quote_id else None,
+         json.dumps(mentions), t),
     )
     mid = int(cur.lastrowid)
     db.run("UPDATE conversations SET last_at = ? WHERE id = ?", (t, int(conv_id)))

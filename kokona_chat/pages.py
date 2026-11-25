@@ -154,6 +154,22 @@ a{color:var(--brand-d);text-decoration:none}
 .tray-tip{color:var(--sub);font-size:12px;text-align:center;padding:16px 8px;line-height:1.7}
 .cmb:active{color:var(--brand)}
 .bubble.img{padding:4px;background:transparent;box-shadow:none;max-width:min(72%,240px)}
+.quote-bar{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 12px;
+  background:var(--soft);border-top:1px solid var(--line);font-size:12px;color:var(--sub)}
+.quote-bar .q-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quote-bar b{color:var(--brand);font-weight:600;margin-right:4px}
+.quote-bar .q-x{appearance:none;border:0;background:none;color:var(--sub);font-size:14px;padding:0 2px}
+.q-box{font-size:12px;line-height:1.5;color:var(--sub);background:rgba(120,96,64,.09);
+  border-left:3px solid #c9b79b;border-radius:6px;padding:5px 8px;margin-bottom:6px;
+  white-space:pre-wrap;word-break:break-word}
+.q-box b{color:var(--brand);font-weight:600;margin-right:4px}
+.bubble.q-only{padding:6px 8px;background:var(--bubble-other);box-shadow:none;max-width:100%}
+.bubble.q-only .q-box{margin:0;border-left:0;padding:0;background:none}
+.at{color:var(--brand);font-weight:600}
+.at-pop{position:fixed;z-index:87;padding:4px;background:#fff;border:1px solid var(--line);
+  border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16);max-height:210px;overflow:auto;min-width:180px}
+.at-pop .item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;font-size:13px}
+.at-pop .item:active{background:var(--soft)}
 .bubble.hold{position:relative;padding:4px;background:transparent;box-shadow:none;
   max-width:min(72%,240px);overflow:hidden}
 .bubble.hold img{display:block;width:100%;height:auto;border-radius:10px;background:var(--soft)}
@@ -652,6 +668,7 @@ APP_BODY = """<div class="app" id="app">
         <button class="icon-btn" data-act="chat-setting">⋯</button>
       </header>
       <div class="msgs" id="msgs"></div>
+      <div class="quote-bar hidden" id="quote-bar"></div>
       <div class="composer">
         <button class="cmb" data-act="open-plus" title="更多" aria-label="更多">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
@@ -1095,6 +1112,8 @@ function writeMsgCache(id, msgs) {
 async function openConv(id) {
   try {
     hideTyping();
+    clearQuote();
+    closeAtPop();
     closeTray();
     S.openId = id;
     const cached = readMsgCache(id);
@@ -1164,6 +1183,53 @@ function mediaHtml(m) {
     + boxH + '" loading="lazy" alt="" data-act="view-image" data-src="' + esc(md.url) + '"></div>';
 }
 
+let QUOTE = null;
+
+function quoteText(q) {
+  if (!q) return '';
+  if (q.recalled) return '消息已撤回';
+  if (q.kind === 'image') return '[图片]';
+  return q.body || '';
+}
+
+function quoteBoxHtml(q) {
+  if (!q) return '';
+  const who = q.sender ? displayName(q.sender) : '消息';
+  return '<div class="q-box"><b>' + esc(who) + '</b>' + esc(quoteText(q).slice(0, 80)) + '</div>';
+}
+
+function setQuote(m) {
+  closeMsgMenu();
+  if (!m) return;
+  QUOTE = { id: m.id, sender_id: m.sender_id, kind: m.kind, body: m.body, recalled: m.recalled };
+  const bar = $('#quote-bar');
+  if (!bar) return;
+  bar.classList.remove('hidden');
+  bar.innerHTML = '<div class="q-txt"><b>' + esc(nameOf(m.sender_id)) + '</b>'
+    + esc(quoteText(m).slice(0, 60)) + '</div>'
+    + '<button class="q-x" data-act="quote-cancel">✕</button>';
+  const el = $('#input');
+  if (el) el.focus();
+}
+
+function clearQuote() {
+  QUOTE = null;
+  const bar = $('#quote-bar');
+  if (bar) { bar.classList.add('hidden'); bar.innerHTML = ''; }
+}
+
+/** 正文里把 @到的名字 标出来。 */
+function bodyHtml(m) {
+  let html = esc(m.body);
+  (m.mentions || []).forEach((uid) => {
+    const mem = ((S.cur && S.cur.members) || []).find((x) => Number(x.id) === Number(uid));
+    if (!mem) return;
+    const tag = esc('@' + displayName(mem));
+    html = html.split(tag).join('<span class="at">' + tag + '</span>');
+  });
+  return html;
+}
+
 function msgHtml(m) {
   if (Number(m.recalled) === 1) return recallHtml(m);
   const mine = S.me && m.sender_id === S.me.id;
@@ -1172,10 +1238,13 @@ function msgHtml(m) {
   const showName = !mine && kind !== 'direct' && kind !== 'pkn';
   const bubble = (m.kind === 'image')
     ? mediaHtml(m)
-    : '<div class="bubble">' + esc(m.body) + '</div>';
-  const inner = showName
-    ? '<div class="col"><div class="b-meta">' + esc(displayName(m.sender)) + '</div>' + bubble + '</div>'
+    : '<div class="bubble">' + quoteBoxHtml(m.quote) + bodyHtml(m) + '</div>';
+  const stack = (m.kind === 'image' && m.quote)
+    ? '<div class="col"><div class="bubble q-only">' + quoteBoxHtml(m.quote) + '</div>' + bubble + '</div>'
     : bubble;
+  const inner = showName
+    ? '<div class="col"><div class="b-meta">' + esc(displayName(m.sender)) + '</div>' + stack + '</div>'
+    : stack;
   const av = '<span class="av-btn" data-act="msg-user" data-id="' + (m.sender_id || 0) + '">'
     + avatar(m.sender, 'sm') + '</span>';
   return '<div class="row' + (mine ? ' me' : '') + '" data-mid="' + m.id + '" data-ts="' + m.created_at + '">'
@@ -1325,7 +1394,8 @@ async function sendImageFile(file) {
     const up = await uploadMedia(data, (r) => setP(44 + r * 50));
     setP(96, '发送中');
     const d = await api('/api/conversations/' + cid + '/messages', 'POST',
-      { media_id: up.media.id, body: '' });
+      { media_id: up.media.id, body: '', quote_id: QUOTE ? QUOTE.id : 0 });
+    clearQuote();
     setP(100);
     row.remove();
     // 上传期间切走了会话就别往当前列表里塞
@@ -1342,6 +1412,7 @@ async function sendImageFile(file) {
 const onImagePicked = (e) => {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
+  closeTray();
   if (file) sendImageFile(file);
 };
 
@@ -1455,6 +1526,41 @@ async function sendSticker(id) {
   } catch (e) { toast(e.message); }
 }
 
+/* ---------------- 群聊 @ ---------------- */
+
+function closeAtPop() {
+  $$('.at-pop').forEach((n) => n.remove());
+}
+
+function openAtPop() {
+  if (!S.cur || S.cur.kind !== 'group') return;
+  const mems = (S.cur.members || []).filter((x) => Number(x.id) !== Number(S.me.id));
+  if (!mems.length) return;
+  closeAtPop();
+  const pop = document.createElement('div');
+  pop.className = 'at-pop';
+  pop.innerHTML = mems.map((m) => '<div class="item" data-act="at-pick" data-id="' + m.id + '">'
+    + avatar(m, 'sm') + '<span>' + esc(displayName(m)) + '</span></div>').join('');
+  document.body.appendChild(pop);
+  const bar = $('#quote-bar');
+  const anchor = (bar && !bar.classList.contains('hidden')) ? bar : document.querySelector('.composer');
+  const c = anchor.getBoundingClientRect();
+  const r = pop.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(c.left + 8, window.innerWidth - r.width - 8)) + 'px';
+  pop.style.top = Math.max(8, c.top - r.height - 8) + 'px';
+  // 别让点选人时输入框失焦
+  pop.addEventListener('pointerdown', (ev) => ev.preventDefault());
+}
+
+function insertMention(mem) {
+  const el = $('#input');
+  if (!el || !mem) return;
+  el.value = el.value.replace(/@$/, '@' + displayName(mem) + ' ');
+  closeAtPop();
+  el.focus();
+  autoGrow(el);
+}
+
 /* ---------------- 消息长按菜单 ---------------- */
 
 let pressTimer = null;
@@ -1555,6 +1661,7 @@ function openMsgMenu(mid) {
   const items = [];
   if (canRecall(m)) items.push(['recall-msg', '撤回', m.id]);
   if (m.kind !== 'image') items.push(['select-msg', '选择文本', m.id]);
+  items.push(['quote-msg', '引用', m.id]);
   items.push(['hide-msg', '删除', m.id]);
   if (m.kind === 'image' && m.media && m.media.id) {
     items.push(['save-media', '保存图片', m.id]);
@@ -1660,7 +1767,9 @@ async function sendMsg() {
   el.value = '';
   autoGrow(el);
   try {
-    const d = await api('/api/conversations/' + S.cur.id + '/messages', 'POST', { body: body });
+    const d = await api('/api/conversations/' + S.cur.id + '/messages', 'POST',
+      { body: body, quote_id: QUOTE ? QUOTE.id : 0 });
+    clearQuote();
     sendTyping(false);
     appendMsg(d.message);
     scrollBottom(true);
@@ -2294,6 +2403,7 @@ document.addEventListener('click', (e) => {
 /* 菜单外点一下、列表一滚，就收起来；顺便退出文字选择态 */
 document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('.msg-menu')) closeMsgMenu();
+  if (!e.target.closest('.at-pop')) closeAtPop();
   if (!e.target.closest('.row.selectable')) {
     $$('.row.selectable').forEach((el) => el.classList.remove('selectable'));
   }
@@ -2344,6 +2454,11 @@ document.addEventListener('click', async (e) => {
     else if (act === 'upload-sticker') { const f = $('#st-file'); if (f) f.click(); }
     else if (act === 'recall-msg') { await recallMsg(Number(id)); }
     else if (act === 'select-msg') { selectMsgText(Number(id)); }
+    else if (act === 'quote-msg') { setQuote(msgById(Number(id))); }
+    else if (act === 'quote-cancel') { clearQuote(); }
+    else if (act === 'at-pick') {
+      insertMention(((S.cur && S.cur.members) || []).find((x) => Number(x.id) === Number(id)));
+    }
     else if (act === 'hide-msg') { await hideMsg(Number(id)); }
     else if (act === 'save-media') { await saveMedia(Number(id)); }
     else if (act === 'save-sticker') { await saveSticker(Number(id)); }
@@ -2630,6 +2745,8 @@ document.addEventListener('visibilitychange', () => {
   if (inputEl) {
     inputEl.addEventListener('input', () => {
       sendTyping(!!inputEl.value.trim());
+      if (S.cur && S.cur.kind === 'group' && /(^|\s)@$/.test(inputEl.value)) openAtPop();
+      else closeAtPop();
     });
     inputEl.addEventListener('focus', () => closeTray());
   }

@@ -451,6 +451,7 @@ def api_send(c):
         raise ApiError("你不在这个会话里", 403)
     body = str(c.arg("body") or "").strip()
     media_id = int(c.arg("media_id") or 0)
+    quote_id = int(c.arg("quote_id") or 0)
     if not body and not media_id:
         raise ApiError("消息不能为空")
     conv = store.conv_row(cid)
@@ -461,7 +462,7 @@ def api_send(c):
     if media_id and db.qone("SELECT 1 FROM media WHERE id = ?", (media_id,)) is None:
         raise ApiError("图片不存在", 404)
     msg = store.append_message(cid, user["id"], body,
-                               "image" if media_id else "text", media_id or None)
+                               "image" if media_id else "text", media_id or None, quote_id or None)
     if msg is None:
         raise ApiError("消息不能为空")
     store.mark_read(cid, user["id"], msg["id"])
@@ -680,14 +681,17 @@ def push_notify(cid, msg):
         if conv is None or conv["kind"] == "legacy":
             return
         sender_id = int(msg.get("sender_id") or 0)
-        body = "[图片]" if msg.get("kind") == "image" else str(msg.get("body") or "")[:120]
+        body = "[图片]" if msg.get("kind") == "image" else str(msg.get("body") or "")
+        mentioned = {int(x) for x in (msg.get("mentions") or [])}
+        body = body[:120]
         for uid in store.member_ids(cid):
             if uid == sender_id:
                 continue
             if sender_id and store.blocked_by(uid, sender_id):
                 continue
             title, icon = store.conv_notify_view(conv, uid)
-            push.queue(uid, cid, title, body, _icon_url(icon),
+            text = ("@你 " + body) if uid in mentioned else body
+            push.queue(uid, cid, title, text, _icon_url(icon),
                        config.SITE_URL + "/?conv=%d" % int(cid), "conv-%d" % int(cid))
     except Exception:  # noqa: BLE001
         pass
@@ -1609,12 +1613,14 @@ def _handle_ws_message(user, text, conn=None):
             return [{"type": "error", "error": "先发 pkn.hello 绑定专属聊天"}]
         body = str(msg.get("text") or "").strip()
         media_id = int(msg.get("media_id") or 0)
+        quote_id = int(msg.get("quote_id") or 0)
         if not body and not media_id:
             return [{"type": "error", "error": "消息为空"}]
         if media_id and db.qone("SELECT 1 FROM media WHERE id = ?", (media_id,)) is None:
             return [{"type": "error", "error": "图片不存在"}]
         m = store.append_message(cid, user["id"], body,
-                                 "image" if media_id else "text", media_id or None)
+                                 "image" if media_id else "text", media_id or None,
+                                 quote_id or None)
         if m is None:
             return [{"type": "error", "error": "消息为空"}]
         store.mark_read(cid, user["id"], m["id"])
@@ -1656,6 +1662,7 @@ def _handle_ws_message(user, text, conn=None):
         cid = int(msg.get("conv_id") or 0)
         body = str(msg.get("text") or "").strip()
         media_id = int(msg.get("media_id") or 0)
+        quote_id = int(msg.get("quote_id") or 0)
         if not body and not media_id:
             return [{"type": "error", "error": "消息为空"}]
         if not store.is_member(cid, user["id"]):
@@ -1668,7 +1675,8 @@ def _handle_ws_message(user, text, conn=None):
         if media_id and db.qone("SELECT 1 FROM media WHERE id = ?", (media_id,)) is None:
             return [{"type": "error", "error": "图片不存在"}]
         m = store.append_message(cid, user["id"], body,
-                                 "image" if media_id else "text", media_id or None)
+                                 "image" if media_id else "text", media_id or None,
+                                 quote_id or None)
         if m is None:
             return [{"type": "error", "error": "消息为空"}]
         store.mark_read(cid, user["id"], m["id"])

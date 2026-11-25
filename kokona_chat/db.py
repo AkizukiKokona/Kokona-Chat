@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS messages (
   media_id   INTEGER,
   recalled   INTEGER NOT NULL DEFAULT 0,
   recall_by  INTEGER,
+  quote_id   INTEGER,
+  mentions   TEXT NOT NULL DEFAULT '[]',             -- 群聊 @ 到的用户 id，JSON 数组
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conv_id, id);
@@ -229,6 +231,10 @@ def _migrate():
         run("ALTER TABLE messages ADD COLUMN media_id INTEGER")
         run("ALTER TABLE messages ADD COLUMN recalled INTEGER NOT NULL DEFAULT 0")
         run("ALTER TABLE messages ADD COLUMN recall_by INTEGER")
+    if "quote_id" not in gcols:
+        run("ALTER TABLE messages ADD COLUMN quote_id INTEGER")
+    if "mentions" not in gcols:
+        run("ALTER TABLE messages ADD COLUMN mentions TEXT NOT NULL DEFAULT '[]'")
     run(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_dm "
         "ON conversations(dm_key) WHERE dm_key IS NOT NULL"

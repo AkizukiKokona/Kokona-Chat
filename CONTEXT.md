@@ -173,12 +173,18 @@ nginx -t && systemctl reload nginx
   私聊与 PKN 固定 200；网站管理员可通过 `POST /api/conversations/<id>/history` 扩到 200/300/500/1000。
   `_trim()` 按会话各自的容量删，不要再回到全局 `config.HISTORY_MAX`。
 - **表情包**：`stickers(user_id, media_id)`，普通用户上限 122，网站管理员不限；长按图片消息可存。
+- 选完图片 `onImagePicked` 里先 `closeTray()`，加号托盘不会留在那儿。
 - 发图时先在本地插一条 `.bubble.hold` 占位（原图 objectURL + 灰蒙层白字百分比）：
   压缩阶段爬到 42% 写「压缩中」，`XMLHttpRequest.upload.onprogress` 接 44%~94% 写「发送中」，成功后换成真消息。
 - 表情托盘先铺骨架（上传格 + 提示）再请求 `/api/stickers`，请求 8 秒超时按失败处理；
   **不要再先渲染「读取表情…」再等接口**，接口一慢就成了死提示。
 - 「选择文本」「保存图片」都走长按菜单；`保存图片` 用 fetch → blob → `a[download]`，失败退 `window.open`。
 - 加号托盘只有「图片」，表情入口只留输入框右侧那个 😊。
+- **引用**：`messages.quote_id`，同会话才认，读取时由 `store.quote_brief()` 拼 `message.quote`；
+  原消息撤回或被裁掉就给 `null`。发送时 HTTP 传 `quote_id`，WS 传 `quote_id`，PKN 用 `pkn.send` + `quote_id`。
+- **@**：`messages.mentions`（JSON 用户 id 数组）。只对 `kind='group'` 生效，`store.scan_mentions()`
+  按成员显示名/用户名扫 `@名字`，私聊和 PKN 恒为 `[]`。推送对被 @ 的人正文加 `@你`。
+  前端只在群聊里输入 `@` 时弹成员面板，选中插入 `@显示名 `，渲染时把命中的名字标成主色。
 - **正在输入**：`POST /api/conversations/<id>/typing {active}` 或 WS `typing` / `pkn.typing`，
   只对 `direct` / `pkn` 转发，群聊丢弃；前端把标题换成「对方正在输入…」，4 秒后自动恢复，节流 1.5 秒。
 - **缓存**：消息首屏缓存 `localStorage.kc_msgs_<conv>`（最近 60 条），先渲染再静默刷新；
