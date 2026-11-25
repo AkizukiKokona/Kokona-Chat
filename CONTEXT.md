@@ -44,15 +44,16 @@ kokonachat/
   - `chat.akizukikokona.com/` → nginx 传空，`proxy_pass ...:8298`
   改代码时**不要**把 `BASE` 写死。
 
-## WS 分流（不能删）
+## WS 入口（已统一）
 
-`/etc/nginx/conf.d/chat-ws-split.conf`：
+`/chat/ws` 只有一个上游：新服务 8298。旧的兼容分流已删除。
 
-```
-map $arg_token $chat_ws_backend { default 127.0.0.1:8299; "" 127.0.0.1:8298; }
-```
+- 鉴权：`?user=用户名&pass=密码`（也认 Cookie / Bearer）
+- 协议：客户端发 `{"action":"send","conv_id":N,"text":"..."}`，服务端推 `{"type":"message",...}`
+- 旧协议（`?token=&ch=`）已废弃，插件已改，说明见 `D:\Project-Kokona\wss重适配.md`
 
-带 `token` 参数的是旧的 DSH/QQ 桥接程序 → 老服务；不带的是新网页 → 新服务。
+**频道分配**：conv 1 = 管理员默认聊天，conv 2 = DSH 插件，conv 3 = 备用。
+旧服务 `kokona-chat.service`（8299）已停用，`/opt/kokona-chat/data/*.jsonl` 仅作归档。
 
 ## 消息顺序
 
@@ -62,8 +63,7 @@ map $arg_token $chat_ws_backend { default 127.0.0.1:8299; "" 127.0.0.1:8298; }
 ## 部署
 
 ```bash
-systemctl restart kokona-im     # 新服务 8298
-systemctl restart kokona-chat   # 旧服务 8299（老 WS 客户端）
+systemctl restart kokona-im     # 唯一在跑的服务 8298
 nginx -t && systemctl reload nginx
 ```
 
