@@ -58,10 +58,18 @@ kokonachat/
 - 「设置」页：封面/头像、显示名、WSS 账号、改密码、公告板、退出。
 - 点好友 / 群成员 / 聊天标题 / 消息头像 → 资料卡（`openUserCard`），样式与自己的卡片一致。
   点了头像就不再弹消息时间：`.row[data-ts]` 的 toast 先判 `[data-act]`。
+- `.app` 是 `position:fixed`，高度吃 `--app-h`（visualViewport.height）、纵向偏移吃 `--vv-top`
+  （visualViewport.offsetTop）。**只改高度不改偏移**会让输入栏卡在半空、下面一片白。
+  `window.syncViewport()` 在 vv 的 resize/scroll、窗口 resize、转屏、输入框 focus 后都调一次。
+- 权限卡片、公告气泡的 `bottom` 要留出输入栏高度（`86px + safe-area`），否则会盖住输入框和发送键。
 - 会话行的按压底色是 `.conv.press`，由 `pointerdown/up` 加删；**不要用 `:active`**，
   移动端会把按下状态黏在那一行，退出聊天后还是深色。
 - 「当前打开的会话」高亮看 `S.openId`（`showList()` 里清空），**不要用 `S.cur`**——
   `S.cur` 退出后还留着给 SSE 用，拿它判高亮会导致退出后那行一直是选中色。
+- 长按判定用 `touchstart/touchmove`（位移 >10px 才取消），**不要用 `pointermove` 取消**——
+  手机上 pointermove 一直冒，一点抖动就把 420ms 的定时器掐了，菜单永远不出现。
+- 长按后浏览器会补一次 click，`longPressed` 要吃掉它，但 `.msg-menu` 里的按钮必须放行，
+  否则菜单弹出来点不动。
 - 长按消息弹的是贴着气泡的浮层 `.msg-menu`（深色圆角 + 下箭头，`position:fixed` 按气泡中心算位置，
   贴顶时翻到下方）。**不要再改回 `openSheet` 底部弹层**。菜单项按情况给「撤回 / 选择文本 / 删除 / 存表情」，
   点别处、滚动、改窗口大小都会收起；`menuOpenedAt` 用来压掉长按之后那次点击的时间 toast。

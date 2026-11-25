@@ -17,7 +17,7 @@ BASE_CSS = """
   --cover-grad:linear-gradient(150deg,#cda36c 0%,#b08050 55%,#93653a 100%);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;height:100%}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;overscroll-behavior:none}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
   background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
@@ -61,7 +61,8 @@ a{color:var(--brand-d);text-decoration:none}
   border:1px solid #ffe082}
 
 /* ---------- 主界面 ---------- */
-.app{display:grid;grid-template-columns:340px 1fr;height:var(--app-h,100dvh);overflow:hidden}
+.app{position:fixed;left:0;right:0;top:0;display:grid;grid-template-columns:340px 1fr;
+  height:var(--app-h,100dvh);transform:translateY(var(--vv-top,0px));overflow:hidden}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
 .side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
 .me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
@@ -102,7 +103,8 @@ a{color:var(--brand-d);text-decoration:none}
 .day-sep{text-align:center;margin:12px 0 10px}
 .day-sep span{font-size:11px;color:var(--sub);background:rgba(0,0,0,.04);padding:2px 8px;border-radius:6px}
 .row{display:flex;margin-bottom:12px;align-items:flex-start;gap:8px;
-  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  touch-action:pan-y;-webkit-tap-highlight-color:transparent}
 .row.selectable .bubble{-webkit-user-select:text;user-select:text}
 .av-btn{display:block;flex:0 0 auto;border-radius:50%}
 .av-btn:active{opacity:.72}
@@ -257,12 +259,13 @@ a{color:var(--brand-d);text-decoration:none}
   padding:9px 16px;border-radius:20px;font-size:13px;z-index:90;max-width:80vw;text-align:center;
   opacity:0;transition:opacity .2s,transform .2s;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
-.ann-bubble{position:fixed;right:16px;bottom:16px;background:var(--panel);border-radius:14px;padding:14px 16px;
+.ann-bubble{position:fixed;right:16px;bottom:calc(86px + env(safe-area-inset-bottom));background:var(--panel);
+  border-radius:14px;padding:14px 16px;
   box-shadow:0 10px 40px rgba(0,0,0,.16);max-width:330px;z-index:70;border:1px solid var(--line)}
 .ann-bubble b{display:block;font-size:14px;margin-bottom:4px}
 .ann-bubble p{margin:0 0 10px;font-size:13px;color:#555;white-space:pre-wrap;max-height:40vh;overflow:auto}
 .ann-bubble .btn{padding:8px;font-size:14px;border-radius:9px}
-.push-bubble{left:16px;right:16px;margin:0 auto;bottom:18px}
+.push-bubble{left:16px;right:16px;margin:0 auto;bottom:calc(86px + env(safe-area-inset-bottom))}
 .push-acts{display:flex;gap:8px}
 .push-acts .btn{flex:1;padding:9px;font-size:14px;border-radius:9px}
 .push-acts .later{flex:0 0 auto;padding:9px 14px;font-size:14px;border-radius:9px;
@@ -1568,14 +1571,43 @@ let longPressed = false;
 let menuOpenedAt = 0;
 
 function bindLongPress(el, fn) {
-  el.addEventListener('pointerdown', (ev) => {
+  let sx = 0;
+  let sy = 0;
+
+  const start = (x, y) => {
     longPressed = false;
     clearTimeout(pressTimer);
-    pressTimer = setTimeout(() => { longPressed = true; fn(ev); }, 480);
+    sx = x;
+    sy = y;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      fn();
+      // 有的浏览器长按完不补 click，别让标记一直挂着吃下一次点击
+      setTimeout(() => { longPressed = false; }, 900);
+    }, 420);
+  };
+  const moved = (x, y) => {
+    if (Math.abs(x - sx) > 10 || Math.abs(y - sy) > 10) clearTimeout(pressTimer);
+  };
+
+  // 触摸走 touch：pointermove 在手机上会持续冒出来，一点抖动就把菜单掐了
+  el.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    if (t) start(t.clientX, t.clientY);
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    if (t) moved(t.clientX, t.clientY);
+  }, { passive: true });
+  el.addEventListener('touchend', () => clearTimeout(pressTimer));
+  el.addEventListener('touchcancel', () => clearTimeout(pressTimer));
+
+  // 鼠标只认 pointer
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') start(e.clientX, e.clientY);
   });
-  ['pointerup', 'pointercancel', 'pointerleave', 'pointermove'].forEach((ev) => {
-    el.addEventListener(ev, () => clearTimeout(pressTimer));
-  });
+  el.addEventListener('pointerup', () => clearTimeout(pressTimer));
+  el.addEventListener('pointercancel', () => clearTimeout(pressTimer));
 }
 
 function msgById(id) {
@@ -1683,6 +1715,7 @@ function openMsgMenu(mid) {
   let top = b.top - r.height - 9;
   let below = false;
   if (top < pad) { top = b.bottom + 9; below = true; }
+  top = Math.min(top, window.innerHeight - r.height - pad);
   box.classList.toggle('below', below);
   box.style.left = left + 'px';
   box.style.top = top + 'px';
@@ -2413,7 +2446,6 @@ document.addEventListener('pointerdown', (e) => {
 document.addEventListener('contextmenu', (e) => {
   if (e.target.closest('.row')) e.preventDefault();
 });
-document.addEventListener('scroll', closeMsgMenu, true);
 window.addEventListener('resize', closeMsgMenu);
 
 /* 触摸按压态用 class 控制，避免移动端 :active 黏在那一行 */
@@ -2430,7 +2462,11 @@ document.addEventListener('pointerdown', (e) => {
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
-  if (longPressed) { longPressed = false; return; }
+  // 长按之后浏览器补发的那次点击要吃掉；但菜单里的按钮必须照常响应
+  if (longPressed) {
+    longPressed = false;
+    if (!el.closest('.msg-menu')) return;
+  }
   const act = el.getAttribute('data-act');
   const id = el.getAttribute('data-id');
 
@@ -2731,15 +2767,26 @@ document.addEventListener('visibilitychange', () => {
   await loadAnns();
   // 移动端键盘弹起时，用 visualViewport 的真实高度，让消息列表跟着缩
   const vv = window.visualViewport;
+  const root = document.documentElement;
+  // 键盘弹起时 visualViewport 会变矮、还可能整体上滚；高度和 offsetTop 一起跟，
+  // 只改高度会让 .app 停在布局视口顶部，输入栏跑到半空、下面一片白。
+  window.syncViewport = () => {
+    if (vv) {
+      root.style.setProperty('--app-h', Math.round(vv.height) + 'px');
+      root.style.setProperty('--vv-top', Math.round(vv.offsetTop) + 'px');
+    } else {
+      root.style.setProperty('--app-h', window.innerHeight + 'px');
+      root.style.setProperty('--vv-top', '0px');
+    }
+    if (document.body.classList.contains('chat-open')) scrollBottom(true);
+  };
   if (vv) {
-    const syncH = () => {
-      document.documentElement.style.setProperty('--app-h', Math.round(vv.height) + 'px');
-      if (document.body.classList.contains('chat-open')) scrollBottom(true);
-    };
-    vv.addEventListener('resize', syncH);
-    vv.addEventListener('scroll', syncH);
-    syncH();
+    vv.addEventListener('resize', window.syncViewport);
+    vv.addEventListener('scroll', window.syncViewport);
   }
+  window.addEventListener('resize', window.syncViewport);
+  window.addEventListener('orientationchange', () => setTimeout(window.syncViewport, 260));
+  window.syncViewport();
 
   const inputEl = $('#input');
   if (inputEl) {
@@ -2748,10 +2795,20 @@ document.addEventListener('visibilitychange', () => {
       if (S.cur && S.cur.kind === 'group' && /(^|\s)@$/.test(inputEl.value)) openAtPop();
       else closeAtPop();
     });
-    inputEl.addEventListener('focus', () => closeTray());
+    inputEl.addEventListener('focus', () => {
+      closeTray();
+      // 键盘动画结束前 vv.height 可能是中间值，补几次校正
+      [80, 260, 560].forEach((d) => setTimeout(() => window.syncViewport && window.syncViewport(), d));
+    });
   }
   const stInput = $('#st-file');
   if (stInput) stInput.addEventListener('change', onStickerPicked);
+  const msgsBox = $('#msgs');
+  if (msgsBox) {
+    msgsBox.addEventListener('scroll', () => {
+      if (Date.now() - menuOpenedAt > 260) closeMsgMenu();
+    }, { passive: true });
+  }
   const imgInput = $('#img-file');
   if (imgInput) imgInput.addEventListener('change', onImagePicked);
   connectSSE();
