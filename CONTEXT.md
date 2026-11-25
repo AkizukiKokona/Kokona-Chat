@@ -135,8 +135,9 @@ nginx -t && systemctl reload nginx
 - SW 行为：有**带焦点的窗口**时不弹（页面里已经能看见），`kokona-test` 例外，方便自测。
 - 限制：iOS 必须先把站点「添加到主屏幕」才有 Push；桌面 Chrome/Edge/Firefox 正常。
 - 权限引导：`maybeAskPush()` 在启动后 1.6s 跑一次（有公告气泡就先等它）。
-  - 首次（`localStorage.kc_push_ask` 为空或超过 3 天）弹卡片说明「只用来推你收到的消息」，确认后才调
-    `Notification.requestPermission()`；点「以后再说」也记 3 天。
+  - **只问一次**：弹卡片说明「只用来推你收到的消息」，两个按钮「不再显示」/「请求权限」。
+    点任一按钮都会写 `localStorage.kc_push_never=1`，之后永远不再弹，想开只能去设置页。
+    只有点「请求权限」才调 `Notification.requestPermission()`。
   - **iOS 且非独立窗口**（`IS_IOS && !IS_STANDALONE`）弹另一套文案，要求先「添加到主屏幕」，
     这时不去请求权限（Safari 标签页里请求了也收不到）。
   - 已被拒绝（`denied`）不打扰，设置页那一行写着「点这里再请求一次权限」，点它会重新触发请求。

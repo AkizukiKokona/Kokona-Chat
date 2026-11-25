@@ -743,8 +743,8 @@ const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
 const IS_STANDALONE = ((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
   || navigator.standalone === true);
 
-function pushRememberAsk() {
-  try { localStorage.setItem('kc_push_ask', String(Date.now())); } catch (e) {}
+function pushNeverAsk() {
+  try { localStorage.setItem('kc_push_never', '1'); } catch (e) {}
 }
 
 function pushBubble(title, text, acts) {
@@ -759,20 +759,20 @@ function pushBubble(title, text, acts) {
 function showIosPushTip() {
   pushBubble('iPhone 要先添加到主屏幕',
     'Safari 里开着页面收不到推送。点底部分享按钮，选「添加到主屏幕」，再从主屏幕图标打开，就能开启通知了。',
-    '<button class="later" data-act="push-ask-later">知道了</button>');
+    '<button class="later" data-act="push-ask-later">不再显示</button>'
+    + '<button class="btn" data-act="push-ask-later">知道了</button>');
 }
 
 function showPushAsk() {
   pushBubble('开启消息通知？',
     '开启后，关掉页面也能收到新消息提醒。只用来推你收到的消息，不发别的。',
-    '<button class="later" data-act="push-ask-later">以后再说</button>'
-    + '<button class="btn" data-act="push-ask-ok">开启</button>');
+    '<button class="later" data-act="push-ask-later">不再显示</button>'
+    + '<button class="btn" data-act="push-ask-ok">请求权限</button>');
 }
 
 function maybeAskPush() {
-  let seen = 0;
-  try { seen = Number(localStorage.getItem('kc_push_ask') || 0); } catch (e) {}
-  if (seen && Date.now() - seen < 3 * 86400000) return;
+  // 问过一次就不再问：点「不再显示」或「知道了」都记下来，后面只能去设置里主动开
+  try { if (localStorage.getItem('kc_push_never') === '1') return; } catch (e) {}
   if (IS_IOS && !IS_STANDALONE) { showIosPushTip(); return; }
   if (!PUSH.supported) return;
   if (PUSH.perm === 'granted' || PUSH.perm === 'denied') return;
@@ -1692,10 +1692,10 @@ document.addEventListener('click', async (e) => {
     else if (act === 'push-on') { await pushEnable(); }
     else if (act === 'push-off') { await pushDisable(); }
     else if (act === 'push-test') { await pushTest(); }
-    else if (act === 'push-ask-later') { pushRememberAsk(); document.querySelectorAll('.push-bubble').forEach((n) => n.remove()); }
+    else if (act === 'push-ask-later') { pushNeverAsk(); document.querySelectorAll('.push-bubble').forEach((n) => n.remove()); }
     else if (act === 'push-ios-tip') { document.querySelectorAll('.mask').forEach((n) => n.remove()); showIosPushTip(); }
     else if (act === 'push-ask-ok') {
-      pushRememberAsk();
+      pushNeverAsk();
       document.querySelectorAll('.push-bubble').forEach((n) => n.remove());
       await pushEnable();
     }
