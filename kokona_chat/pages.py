@@ -61,7 +61,8 @@ a{color:var(--brand-d);text-decoration:none}
   border:1px solid #ffe082}
 
 /* ---------- 主界面 ---------- */
-.app{display:grid;grid-template-columns:340px 1fr;height:100vh;height:100dvh;overflow:hidden}
+.app{position:fixed;left:0;right:0;top:var(--vv-top,0px);display:grid;grid-template-columns:340px 1fr;
+  height:100vh;height:100dvh;height:var(--app-h,100dvh);overflow:hidden;min-height:0}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
 .side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
 .me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
@@ -89,8 +90,7 @@ a{color:var(--brand-d);text-decoration:none}
 
 .main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg);position:relative}
 /* 聊天区必须是纵向弹性容器：缺这条时 msgs 的 flex:1 失效，输入框会被顶到屏幕中间 */
-.chat-view{display:flex;flex-direction:column;flex:1;min-height:0;height:100%;
-  overflow:hidden;padding-bottom:var(--kb,0px)}
+.chat-view{display:flex;flex-direction:column;flex:1;min-height:0;height:100%;overflow:hidden}
 .chat-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);
   border-bottom:1px solid var(--line);padding-top:calc(10px + env(safe-area-inset-top));flex:0 0 auto}
 .chat-title{flex:1;text-align:center;font-weight:600;font-size:16px;overflow:hidden;
@@ -119,7 +119,7 @@ a{color:var(--brand-d);text-decoration:none}
 .sys{text-align:center;font-size:12px;color:var(--sub);margin:10px 0}
 .composer{display:flex;gap:8px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);
   align-items:flex-end;flex:0 0 auto;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
-.composer textarea{flex:1 1 0;min-width:0;resize:none;max-height:104px;min-height:40px;padding:9px 12px;border-radius:9px;
+.composer textarea{flex:1 1 0;min-width:0;resize:none;max-height:var(--ta-max,104px);min-height:40px;padding:9px 12px;border-radius:9px;
   border:1px solid var(--line);background:var(--soft);outline:none;line-height:1.4;overflow-y:auto}
 .composer textarea:focus{border-color:var(--brand);background:#fff}
 .send-btn{flex:0 0 auto;padding:0 14px;height:40px;border-radius:9px;background:var(--brand);color:#fff;font-weight:600}
@@ -341,6 +341,13 @@ a{color:var(--brand-d);text-decoration:none}
   body.panel-open .main{display:flex}
   .chat-head{padding-left:6px}
   .panel-head{display:flex}
+}
+@media(max-height:320px){
+  .chat-head{padding-top:4px;padding-bottom:4px}
+  .chat-title{font-size:14px}
+  .composer{padding-top:4px;padding-bottom:4px}
+  .composer textarea{min-height:34px;padding:6px 10px}
+  .send-btn,.cmb{height:34px}
 }
 @media(min-width:761px){
   .chat-head .back{display:none}
@@ -1789,7 +1796,8 @@ async function saveSticker(mediaId) {
 }
 
 function autoGrow(el) {
-  const MAX = 104;
+  const cap = parseFloat(getComputedStyle(el).maxHeight);
+  const MAX = isFinite(cap) && cap > 0 ? cap : 104;
   el.style.height = 'auto';
   const h = Math.min(el.scrollHeight, MAX);
   el.style.height = h + 'px';
@@ -2764,13 +2772,18 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------------- 诊断日志（移动端常开，写到服务端排查用） ---------------- */
 
-const DIAG = { on: false, sid: '', q: [], timer: null, last: {} };
+const DIAG = { on: false, verbose: false, sid: '', q: [], timer: null, last: {} };
 
 (function initDiag() {
   const touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-  DIAG.on = touch || /(^|[?&])diag=1/.test(location.search);
+  DIAG.verbose = /(^|[?&])diag=1/.test(location.search);
+  DIAG.on = touch || DIAG.verbose;
   DIAG.sid = Math.random().toString(36).slice(2, 8);
 })();
+
+// 触摸设备只上报真问题（报错、布局错位），不再把每次视口变化都写服务器；
+// 要完整轨迹就在地址后加 ?diag=1
+const DIAG_ALWAYS = { err: 1, rej: 1, bad: 1 };
 
 function diagRect(sel) {
   const el = document.querySelector(sel);
@@ -2786,7 +2799,11 @@ function diagSnap() {
   return {
     vw: window.innerWidth,
     vh: window.innerHeight,
+    oh: window.outerHeight,
+    ah: (window.screen && screen.availHeight) || 0,
     dh: document.documentElement.clientHeight,
+    hh: Math.round(document.documentElement.getBoundingClientRect().height),
+    bh: Math.round(document.body.getBoundingClientRect().height),
     vv: vv ? [Math.round(vv.width), Math.round(vv.height), Math.round(vv.offsetTop), Number(vv.scale.toFixed(2))] : null,
     st: Math.round(se.scrollTop || 0),
     kb: getComputedStyle(document.documentElement).getPropertyValue('--kb').trim(),
@@ -2801,6 +2818,7 @@ function diagSnap() {
 
 function diag(ev, extra) {
   if (!DIAG.on) return;
+  if (!DIAG.verbose && !DIAG_ALWAYS[ev]) return;
   const now = Date.now();
   if (DIAG.last[ev] && now - DIAG.last[ev] < 250) return;
   DIAG.last[ev] = now;
@@ -2836,30 +2854,58 @@ function diagFlush(beacon) {
   await loadConvs(true);
   await loadFriends();
   await loadAnns();
-  // 移动端键盘弹起时，用 visualViewport 的真实高度，让消息列表跟着缩
+  // 移动端键盘弹起时，整页跟着 visualViewport 收缩（顶边跟着滚），
+  // 这样输入框永远停在键盘上方，消息列表也不会被顶飞。
   const vv = window.visualViewport;
   const root = document.documentElement;
-  // 键盘只影响输入区：算出被遮住的高度，给 .chat-view 垫底，
-  // 不再改 .app 高度，避免刷新时读到半截的 vv.height 把整页压扁。
+  let lastGoodH = 0;
+  let settled = false;
   window.syncViewport = () => {
-    let kb = 0;
-    if (vv) {
-      const vh = window.innerHeight;
-      // offsetTop 也算进去：iOS 会把可视视口整体上滚
-      kb = vh - vv.height - (vv.offsetTop || 0);
-      if (!isFinite(kb) || kb < 40) kb = 0;
-      kb = Math.min(kb, Math.round(vh * 0.7));
+    const raw = vv ? vv.height : window.innerHeight;
+    // 首帧的数值不可靠，等布局稳定再接管高度；在此之前用 CSS 的 100dvh
+    if (!settled) { diag('sync-early'); return; }
+    // 有些安卓内核在键盘动画中会短暂报 0，这时沿用上一次的正常高度
+    if (!raw || raw < 80) {
+      if (lastGoodH) root.style.setProperty('--app-h', lastGoodH + 'px');
+      diag('sync-skip');
+      return;
     }
-    root.style.setProperty('--kb', Math.round(kb) + 'px');
+    lastGoodH = Math.round(raw);
+    root.style.setProperty('--app-h', lastGoodH + 'px');
+    // iOS 会把可视视口整体上滚，offsetTop 不跟的话 app 会停在上面、下面留白
+    const top = vv ? Math.round(vv.offsetTop || 0) : 0;
+    root.style.setProperty('--vv-top', top + 'px');
+    // 输入框最多占可视高度减去头部和留白，别把消息区挤没
+    const taMax = Math.max(34, Math.min(104, Math.round(raw) - 170));
+    root.style.setProperty('--ta-max', taMax + 'px');
+    root.style.setProperty('--kb', String(Math.max(0, Math.round(window.innerHeight - raw - top))) + 'px');
     if (document.body.classList.contains('chat-open')) scrollBottom(true);
+    checkLayout(raw, top);
     diag('sync');
   };
+  // 只在布局真的错位时上报，给以后线上排查留个探头
+  function checkLayout(raw, top) {
+    const app = document.querySelector('.app');
+    if (!app) return;
+    const r = app.getBoundingClientRect();
+    const off = Math.abs(r.height - raw) > 2 || Math.abs(r.top - top) > 2;
+    const comp = document.body.classList.contains('chat-open') ? document.querySelector('.composer') : null;
+    const cr = comp && comp.getBoundingClientRect();
+    const cut = cr && cr.height > 0 && cr.bottom > top + raw + 2;
+    if (off || cut) {
+      diag('bad', {
+        ah: Math.round(r.height), at: Math.round(r.top), ab: Math.round(r.bottom),
+        cb: cr ? Math.round(cr.bottom) : 0
+      });
+    }
+  }
   if (vv) {
     vv.addEventListener('resize', window.syncViewport);
     vv.addEventListener('scroll', window.syncViewport);
   }
   window.addEventListener('resize', window.syncViewport);
   window.addEventListener('orientationchange', () => setTimeout(window.syncViewport, 260));
+  setTimeout(() => { settled = true; window.syncViewport(); }, 320);
   window.syncViewport();
 
   window.addEventListener('error', (e) => diag('err', {

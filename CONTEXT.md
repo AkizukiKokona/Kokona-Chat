@@ -58,12 +58,17 @@ kokonachat/
 - 「设置」页：封面/头像、显示名、WSS 账号、改密码、公告板、退出。
 - 点好友 / 群成员 / 聊天标题 / 消息头像 → 资料卡（`openUserCard`），样式与自己的卡片一致。
   点了头像就不再弹消息时间：`.row[data-ts]` 的 toast 先判 `[data-act]`。
-- `.app` 高度只用 `100dvh`，**不要再用 JS 写整页高度**。启动时读到的 `visualViewport.height`
-  常常是半截值，写进 `--app-h` 会把整页压扁：输入栏停半空、下面一片白、点啥都没反应。
-- 键盘只抬输入区：`syncViewport()` 算 `kb = innerHeight - vv.height - vv.offsetTop`，
-  写进 `--kb`，`.chat-view` 用 `padding-bottom:var(--kb)` 垫高。高度不变，就不会挤压消息列表。
-  在 vv 的 resize/scroll、窗口 resize、转屏、输入框 focus（补 80/260/560ms）和 blur 后各调一次。
-- 输入框最高 104px（`autoGrow` 同步 `max-height`），再多就在框内滚，别让它继续撑高把列表压没。
+- `.app` 是 `position:fixed`，高度写 `--app-h`，顶边跟 `--vv-top`，整页跟着 `visualViewport` 走。
+  **刷新那一瞬间的 `vv.height` 不可信**（安卓内核会直接报 0/半截），所以先让 CSS 的 `100dvh`
+  顶着，320ms 后（`settled`）才由 `syncViewport()` 接管；`raw < 80` 就沿用上一次的正常高度
+  （`lastGoodH`）。不这么做的话：输入栏停半空、下面一片白、点啥都没反应——这就是踩过的大坑。
+- `--vv-top` 必须跟 `vv.offsetTop`：iOS 弹键盘是把可视视口整体往上滚，不跟就停在上面、底部留白。
+  监听 `vv` 的 `resize`/`scroll`、窗口 `resize`、转屏，focus 后再补调一次。
+- `--kb` 只给浮层（权限卡、表情托盘）估键盘高度用，`.chat-view` **不再**用 `padding-bottom` 垫它。
+- 输入框上限是 `--ta-max`（`min(104, 视口高 - 170)`，最矮 34px），`autoGrow` 读计算后的
+  `max-height`；超了就在框内滚，别再让它撑高把消息列表压没。
+- 前端诊断：地址加 `?diag=1` 全量上报；触摸设备默认只在 `err` / `rej` / `bad`（布局自检发现
+  错位）时上报。日志写 `data/diag/YYYYMMDD.jsonl`（8MB 轮转），管理员用 `/api/diag/read?n=200` 取。
 - 权限卡片、公告气泡的 `bottom` 要留出输入栏高度（`86px + safe-area`），否则会盖住输入框和发送键。
 - 会话行的按压底色是 `.conv.press`，由 `pointerdown/up` 加删；**不要用 `:active`**，
   移动端会把按下状态黏在那一行，退出聊天后还是深色。
