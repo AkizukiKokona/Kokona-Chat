@@ -144,6 +144,30 @@ nginx -t && systemctl reload nginx
     这时不去请求权限（Safari 标签页里请求了也收不到）。
   - 已被拒绝（`denied`）不打扰，设置页那一行写着「点这里再请求一次权限」，点它会重新触发请求。
 
+## 图片 / 撤回 / 群角色（2026-11-25）
+
+- **图片消息**：`messages.kind='image'` + `media_id`；文件按 `sha1(webp)` 存在 `data/media/<hash>.webp`，
+  路由 `GET /m/<hash>.webp` 带 `immutable` 长缓存，**同一张图全服只存一份**。
+  上传走 `POST /api/media`（只收 webp，≤800KB），前端 canvas 最长边 1600、按体积降到 0.4~0.86 质量。
+- **撤回**：`store.recall_message`。本人 5 分钟内；群主/群管理员对**本群任何人**不限时。
+  撤回后 `recalled=1`、`body` 空、`media` 为 null，历史里只留占位；广播 `message_recalled`
+  （PKN 连接收到 `pkn.message_recalled`）。
+- **本地删除**：`msg_hidden(user_id, msg_id)`，`recent_messages` 带 viewer 时过滤，只影响自己。
+- **群角色**在 `conversation_members.role`：`owner` / `admin` / `member`。
+  **和 `users.role`（网站管理员）完全无关**，判断一律用 `store.member_role / can_edit_group / can_moderate`。
+  - 群主：解散群、任免群管理员、改名字/头像/公告
+  - 群管理员：改名字/头像/公告、撤成员消息（不限时）
+  - 普通成员：只能退出
+- **群公告**在 `conversations.notice`（≠ 网站公告），谁都能看，群主/群管理员能改。
+- **容量**：`conversations.history_max`，建群时写死（网站管理员建 300，其他人 200），
+  私聊与 PKN 固定 200；网站管理员可通过 `POST /api/conversations/<id>/history` 扩到 200/300/500/1000。
+  `_trim()` 按会话各自的容量删，不要再回到全局 `config.HISTORY_MAX`。
+- **表情包**：`stickers(user_id, media_id)`，普通用户上限 122，网站管理员不限；长按图片消息可存。
+- **正在输入**：`POST /api/conversations/<id>/typing {active}` 或 WS `typing` / `pkn.typing`，
+  只对 `direct` / `pkn` 转发，群聊丢弃；前端把标题换成「对方正在输入…」，4 秒后自动恢复，节流 1.5 秒。
+- **缓存**：消息首屏缓存 `localStorage.kc_msgs_<conv>`（最近 60 条），先渲染再静默刷新；
+  图片靠 `immutable` 头，头像 1 天。
+
 ## 已知限制
 
 

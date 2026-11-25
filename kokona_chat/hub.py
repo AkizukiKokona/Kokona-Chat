@@ -92,6 +92,17 @@ def _pkn_frame(payload, conv_id):
     cid = int(payload.get("conv_id") or 0)
     if kind == "message" and cid == conv_id:
         return {"type": "pkn.message", "message": payload.get("message")}
+    if kind == "typing" and cid == conv_id:
+        return {"type": "pkn.typing", "user_id": payload.get("user_id"),
+                "active": bool(payload.get("active"))}
+    if kind == "message_recalled" and cid == conv_id:
+        return {
+            "type": "pkn.message_recalled",
+            "message_id": payload.get("message_id"),
+            "by": payload.get("by"),
+            "sender_id": payload.get("sender_id"),
+            "scope": payload.get("scope"),
+        }
     if kind == "conversation_removed" and cid == conv_id:
         return {"type": "pkn.closed"}
     return None

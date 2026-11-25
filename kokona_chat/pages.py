@@ -61,7 +61,7 @@ a{color:var(--brand-d);text-decoration:none}
   border:1px solid #ffe082}
 
 /* ---------- 主界面 ---------- */
-.app{display:grid;grid-template-columns:340px 1fr;height:100vh;height:100dvh;overflow:hidden}
+.app{display:grid;grid-template-columns:340px 1fr;height:var(--app-h,100dvh);overflow:hidden}
 .sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-width:0}
 .side-top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
 .me-btn{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:3px;border-radius:10px;text-align:left}
@@ -118,6 +118,22 @@ a{color:var(--brand-d);text-decoration:none}
 .composer textarea:focus{border-color:var(--brand);background:#fff}
 .send-btn{padding:0 16px;height:40px;border-radius:9px;background:var(--brand);color:#fff;font-weight:600}
 .send-btn:active{background:var(--brand-d)}
+.cmb{font-size:19px;line-height:1;padding:0 6px;height:40px;color:var(--sub)}
+.cmb:active{color:var(--brand)}
+.bubble.img{padding:4px;background:transparent;box-shadow:none;max-width:min(72%,240px)}
+.bubble.img img{display:block;width:100%;height:auto;border-radius:10px;background:var(--soft)}
+.recall{color:var(--sub);font-size:12px;text-align:center;margin:8px 0}
+.st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:10px;padding:4px 2px}
+.st-cell{position:relative;border-radius:10px;background:var(--soft);padding:6px;display:flex;
+  align-items:center;justify-content:center;min-height:72px}
+.st-cell img{max-width:100%;max-height:64px;display:block;border-radius:6px}
+.st-empty{color:var(--sub);font-size:13px;padding:18px 4px;text-align:center;line-height:1.7}
+.view-wrap img{width:100%;display:block;border-radius:10px}
+.ucard-top{background:var(--cover-grad);padding:26px 20px 22px;border-radius:0}
+.chat-title.typing{color:var(--brand);font-weight:600;font-size:14px}
+.ucard-top .ucard-close{z-index:4}
+.ucard-top > .profile-av{border-radius:18px}
+.pill.role{background:#f4e8d4;color:var(--brand-d);margin-left:6px}
 
 /* ---------- 面板（通讯录等） ---------- */
 .panel{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;overscroll-behavior:contain;background:var(--bg)}
@@ -139,7 +155,7 @@ a{color:var(--brand-d);text-decoration:none}
 .pill.gray{background:#f2ead9;color:var(--sub)}
 .empty{text-align:center;color:var(--sub);font-size:13px;padding:40px 10px}
 .mini-form{display:flex;flex-direction:column;gap:8px;padding:14px}
-.mini-form input{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--soft);outline:none}
+.mini-form textarea,.mini-form input{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--soft);outline:none;font:inherit;width:100%}.mini-form textarea{resize:vertical;min-height:70px;line-height:1.6}
 .mini-form .btn{padding:10px;font-size:15px}
 .mini-form label{font-size:13px;color:var(--sub)}
 
@@ -227,7 +243,7 @@ a{color:var(--brand-d);text-decoration:none}
 .mini-pw .btn{width:auto;padding:0 14px;height:38px;font-size:14px}
 
 /* ---------- 资料卡 ---------- */
-.ucard{position:relative}
+.ucard{position:relative;border-radius:14px;overflow:hidden;background:var(--panel)}
 .ucard-hero{position:relative;height:158px;background:var(--cover-grad);overflow:hidden}
 .ucard-av{position:absolute;left:18px;bottom:-32px;width:78px;height:78px;border-radius:50%;
   border:3px solid #fff;object-fit:cover;background:#efe4d0;z-index:2;box-shadow:0 4px 14px rgba(0,0,0,.14)}
@@ -598,6 +614,8 @@ APP_BODY = """<div class="app" id="app">
       <div class="msgs" id="msgs"></div>
       <div class="composer">
         <textarea id="input" rows="1" placeholder="发消息…" autocomplete="off"></textarea>
+        <button class="cmb" data-act="pick-image" title="图片">🖼</button>
+        <button class="cmb" data-act="open-stickers" title="表情">😊</button>
         <button class="send-btn" data-act="send">发送</button>
       </div>
     </section>
@@ -618,6 +636,7 @@ APP_BODY = """<div class="app" id="app">
     <div class="drawer-foot">Kokona Chat · 轻量版</div>
   </aside>
 </div>
+<input type="file" id="img-file" accept="image/*" hidden>
 <div class="toast" id="toast"></div>
 """
 
@@ -991,6 +1010,7 @@ function showList() {
   document.body.classList.remove('chat-open', 'panel-open');
   S.view = 'chats';
   S.openId = null;
+  hideTyping();
   const p = $('#panel-view');
   p.classList.add('hidden');
   $('#chat-view').classList.add('hidden');
@@ -1008,14 +1028,41 @@ function convTitle(conv, members) {
   return conv.title || '旧频道';
 }
 
+function msgCacheKey(id) { return 'kc_msgs_' + id; }
+
+function readMsgCache(id) {
+  try {
+    const raw = localStorage.getItem(msgCacheKey(id));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function writeMsgCache(id, msgs) {
+  try { localStorage.setItem(msgCacheKey(id), JSON.stringify(msgs.slice(-60))); } catch (e) {}
+}
+
 async function openConv(id) {
   try {
-    const d = await api('/api/conversations/' + id);
+    hideTyping();
     S.openId = id;
+    const cached = readMsgCache(id);
+    if (cached && cached.length) {
+      if (!S.cur || Number(S.cur.id) !== Number(id)) S.cur = { id: id, kind: 'direct', members: [] };
+      S.msgs = cached;
+      $('#chat-title').textContent = (S.convs.find((c) => c.id === id) || {}).title || '';
+      renderMsgs();
+      $('#chat-view').classList.remove('hidden');
+      $('#panel-view').classList.add('hidden');
+      document.body.classList.add('chat-open');
+      document.body.classList.remove('panel-open');
+      scrollBottom(true);
+    }
+    const d = await api('/api/conversations/' + id);
     S.cur = d.conversation;
     S.cur.members = d.members || [];
     S.cur.title = convTitle(d.conversation, d.members);
     S.msgs = d.messages || [];
+    writeMsgCache(id, S.msgs);
     $('#chat-title').textContent = S.cur.title;
     renderMsgs();
     $('#chat-view').classList.remove('hidden');
@@ -1032,12 +1079,48 @@ async function openConv(id) {
   }
 }
 
+function nameOf(uid) {
+  const id = Number(uid);
+  if (S.me && Number(S.me.id) === id) return displayName(S.me);
+  const mem = (S.cur && S.cur.members || []).find((x) => Number(x.id) === id);
+  if (mem) return displayName(mem);
+  return '有人';
+}
+
+/** 撤回后的一行系统提示。 */
+function recallHtml(m) {
+  const who = nameOf(m.sender_id);
+  const by = nameOf(m.recall_by || m.sender_id);
+  if (m.recall_by && Number(m.recall_by) !== Number(m.sender_id)) {
+    return '<div class="recall">管理员 ' + esc(by) + ' 撤回了 ' + esc(who) + ' 的消息</div>';
+  }
+  return '<div class="recall">' + esc(who) + ' 撤回了一条消息</div>';
+}
+
+function mediaHtml(m) {
+  const md = m.media || {};
+  if (!md.url) return '';
+  const w = md.w || 0, h = md.h || 0;
+  let boxW = 220, boxH = 220;
+  if (w && h) {
+    const ratio = w / h;
+    boxW = Math.min(220, w);
+    boxH = Math.round(boxW / ratio);
+    if (boxH > 260) { boxH = 260; boxW = Math.round(boxH * ratio); }
+  }
+  return '<div class="bubble img"><img src="' + esc(md.url) + '" width="' + boxW + '" height="'
+    + boxH + '" loading="lazy" alt="" data-act="view-image" data-src="' + esc(md.url) + '"></div>';
+}
+
 function msgHtml(m) {
+  if (Number(m.recalled) === 1) return recallHtml(m);
   const mine = S.me && m.sender_id === S.me.id;
   const kind = (S.cur && S.cur.kind) || 'direct';
   // 私聊（含 WSS 那条）不显示名字；群聊/频道里别人的消息，名字放在气泡上方
   const showName = !mine && kind !== 'direct' && kind !== 'pkn';
-  const bubble = '<div class="bubble">' + esc(m.body) + '</div>';
+  const bubble = (m.kind === 'image')
+    ? mediaHtml(m)
+    : '<div class="bubble">' + esc(m.body) + '</div>';
   const inner = showName
     ? '<div class="col"><div class="b-meta">' + esc(displayName(m.sender)) + '</div>' + bubble + '</div>'
     : bubble;
@@ -1057,10 +1140,13 @@ function renderMsgs() {
     if (needSep(prev, m)) {
       html += '<div class="day-sep"><span>' + fmtSep(m.created_at) + '</span></div>';
     }
-    html += msgHtml(m);
+    html += Number(m.recalled) === 1 ? recallHtml(m) : msgHtml(m);
     prev = m;
   }
   box.innerHTML = html;
+  $$('.row[data-mid]', box).forEach((row) => {
+    bindLongPress(row, () => openMsgMenu(row.getAttribute('data-mid')));
+  });
 }
 
 function nearBottom() {
@@ -1083,8 +1169,226 @@ function appendMsg(m) {
   if (needSep(prev, m)) {
     box.insertAdjacentHTML('beforeend', '<div class="day-sep"><span>' + fmtSep(m.created_at) + '</span></div>');
   }
-  box.insertAdjacentHTML('beforeend', msgHtml(m));
+  writeMsgCache(S.cur ? S.cur.id : 0, S.msgs);
+  box.insertAdjacentHTML('beforeend', Number(m.recalled) === 1 ? recallHtml(m) : msgHtml(m));
+  const lastRow = box.querySelector('.row[data-ts]:last-of-type');
+  if (lastRow && !Number(m.recalled)) {
+    bindLongPress(lastRow, () => openMsgMenu(lastRow.getAttribute('data-mid')));
+  }
   if (stick) scrollBottom(true);
+}
+
+/* ---------------- 图片 ---------------- */
+
+const IMG_MAX_EDGE = 1600;
+const IMG_MAX_BYTES = 760 * 1024;
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('\u56fe\u7247\u8bfb\u53d6\u5931\u8d25'));
+    img.src = src;
+  });
+}
+
+async function fileToWebp(file) {
+  const url = URL.createObjectURL(file);
+  let img;
+  try { img = await loadImage(url); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  let { width: w, height: h } = img;
+  const scale = Math.min(1, IMG_MAX_EDGE / Math.max(w, h));
+  w = Math.max(1, Math.round(w * scale));
+  h = Math.max(1, Math.round(h * scale));
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, w, h);
+  let data = cv.toDataURL('image/webp', 0.86);
+  if (data.indexOf('data:image/webp') !== 0) data = cv.toDataURL('image/png');
+  let q = 0.86;
+  while (data.length * 0.75 > IMG_MAX_BYTES && q > 0.4) {
+    q -= 0.08;
+    data = cv.toDataURL('image/webp', q);
+  }
+  return data;
+}
+
+async function sendImageFile(file) {
+  if (!S.cur) return;
+  try {
+    toast('压缩图片…');
+    const data = await fileToWebp(file);
+    const up = await api('/api/media', 'POST', { data: data });
+    await api('/api/conversations/' + S.cur.id + '/messages', 'POST',
+      { media_id: up.media.id, body: '' });
+  } catch (e) {
+    toast('图片发送失败：' + (e.message || '未知错误'));
+  }
+}
+
+const onImagePicked = (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) sendImageFile(file);
+};
+
+/* ---------------- 表情包 ---------------- */
+
+let STICKERS = [];
+
+async function openStickers() {
+  try {
+    const d = await api('/api/stickers');
+    STICKERS = d.stickers || [];
+    const limitText = d.limit ? ('已存 ' + STICKERS.length + ' / ' + d.limit) : ('已存 ' + STICKERS.length);
+    const body = STICKERS.length
+      ? '<div class="st-grid">' + STICKERS.map((st) =>
+          '<div class="st-cell" data-act="send-sticker" data-id="' + st.id + '">'
+          + '<img src="' + esc(st.url) + '" alt=""></div>').join('') + '</div>'
+      : '<div class="st-empty">还没有表情包<br>长按别人发的图片，就能存成表情</div>';
+    openSheet('表情包', body + '<div class="set-note">' + limitText
+      + ' · 长按表情可以删除</div>', '');
+    const cells = $$('.st-cell');
+    cells.forEach((cell) => bindLongPress(cell, () => deleteSticker(Number(cell.getAttribute('data-id')))));
+  } catch (e) { toast(e.message); }
+}
+
+async function deleteSticker(id) {
+  try {
+    await api('/api/stickers/' + id, 'DELETE');
+    toast('已删除');
+    document.querySelectorAll('.mask').forEach((m) => m.remove());
+    openStickers();
+  } catch (e) { toast(e.message); }
+}
+
+async function sendSticker(id) {
+  document.querySelectorAll('.mask').forEach((m) => m.remove());
+  try {
+    await api('/api/conversations/' + S.cur.id + '/messages', 'POST', { media_id: id, body: '' });
+  } catch (e) { toast(e.message); }
+}
+
+/* ---------------- 消息长按菜单 ---------------- */
+
+let pressTimer = null;
+let longPressed = false;
+
+function bindLongPress(el, fn) {
+  el.addEventListener('pointerdown', (ev) => {
+    longPressed = false;
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => { longPressed = true; fn(ev); }, 480);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave', 'pointermove'].forEach((ev) => {
+    el.addEventListener(ev, () => clearTimeout(pressTimer));
+  });
+}
+
+function msgById(id) {
+  return S.msgs.find((m) => Number(m.id) === Number(id));
+}
+
+function canRecall(m) {
+  if (Number(m.recalled) === 1) return false;
+  const mine = Number(m.sender_id) === Number(S.me.id);
+  const mod = S.cur && (S.cur.my_role === 'owner' || S.cur.my_role === 'admin');
+  if (!mine && !mod) return false;
+  if (mine && !mod && (Math.floor(Date.now() / 1000) - Number(m.created_at)) > 300) return false;
+  return true;
+}
+
+function memberActions(id) {
+  const m = (S.cur.members || []).find((x) => Number(x.id) === Number(id));
+  if (!m) return;
+  const isAdmin = m.member_role === 'admin';
+  openSheet(displayName(m),
+    '<div class="card" style="margin:0">'
+    + '<div class="item" data-act="set-role" data-id="' + id + '" data-role="'
+    + (isAdmin ? 'member' : 'admin') + '"><div class="txt"><div class="t1">'
+    + (isAdmin ? '取消群管理员' : '设为群管理员') + '</div></div></div>'
+    + '<div class="item" data-act="member-card" data-id="' + id + '"><div class="txt">'
+    + '<div class="t1">查看资料卡</div></div></div></div>', '');
+}
+
+async function reloadConv() {
+  if (!S.cur) return;
+  const d = await api('/api/conversations/' + S.cur.id);
+  S.cur = d.conversation;
+  S.cur.members = d.members || [];
+  await loadConvs(true);
+}
+
+let typingHideTimer = null;
+let typingSentAt = 0;
+
+function showTyping() {
+  const el = $('#chat-title');
+  if (!el || !S.cur) return;
+  el.textContent = '对方正在输入…';
+  el.classList.add('typing');
+  clearTimeout(typingHideTimer);
+  typingHideTimer = setTimeout(() => hideTyping(), 4000);
+}
+
+function hideTyping() {
+  clearTimeout(typingHideTimer);
+  const el = $('#chat-title');
+  if (!el) return;
+  el.classList.remove('typing');
+  if (S.cur) el.textContent = convTitle(S.cur, S.cur.members || []);
+}
+
+function sendTyping(active) {
+  if (!S.cur) return;
+  if (S.cur.kind !== 'direct' && S.cur.kind !== 'pkn') return;
+  const now = Date.now();
+  if (active && now - typingSentAt < 1500) return;
+  typingSentAt = active ? now : 0;
+  api('/api/conversations/' + S.cur.id + '/typing', 'POST', { active: !!active }).catch(() => {});
+}
+
+function openViewImage(src) {
+  if (!src) return;
+  openSheet(null, '<div class="view-wrap"><img src="' + esc(src) + '" alt=""></div>', '');
+}
+
+function openMsgMenu(mid) {
+  const m = msgById(mid);
+  if (!m) return;
+  const rows = [];
+  if (canRecall(m)) rows.push('<div class="item" data-act="recall-msg" data-id="' + m.id + '"><div class="txt"><div class="t1">撤回</div></div></div>');
+  rows.push('<div class="item" data-act="hide-msg" data-id="' + m.id + '"><div class="txt"><div class="t1">删除（只删我这边）</div></div></div>');
+  if (m.kind === 'image' && m.media && m.media.id) {
+    rows.push('<div class="item" data-act="save-sticker" data-id="' + m.media.id + '"><div class="txt"><div class="t1">存为表情包</div></div></div>');
+  }
+  openSheet('消息', '<div class="card" style="margin:0">' + rows.join('') + '</div>', '');
+}
+
+async function recallMsg(id) {
+  document.querySelectorAll('.mask').forEach((x) => x.remove());
+  try { await api('/api/messages/' + id + '/recall', 'POST', {}); }
+  catch (e) { toast(e.message); }
+}
+
+async function hideMsg(id) {
+  document.querySelectorAll('.mask').forEach((x) => x.remove());
+  try {
+    await api('/api/messages/' + id + '/hide', 'POST', {});
+    S.msgs = S.msgs.filter((m) => Number(m.id) !== Number(id));
+    renderMsgs();
+    toast('已删除');
+  } catch (e) { toast(e.message); }
+}
+
+async function saveSticker(mediaId) {
+  document.querySelectorAll('.mask').forEach((x) => x.remove());
+  try {
+    const d = await api('/api/stickers', 'POST', { media_id: Number(mediaId) });
+    toast('已存为表情（' + d.used + '）');
+  } catch (e) { toast(e.message); }
 }
 
 function autoGrow(el) {
@@ -1100,6 +1404,7 @@ async function sendMsg() {
   autoGrow(el);
   try {
     const d = await api('/api/conversations/' + S.cur.id + '/messages', 'POST', { body: body });
+    sendTyping(false);
     appendMsg(d.message);
     scrollBottom(true);
   } catch (e) {
@@ -1118,7 +1423,21 @@ function connectSSE() {
   es.onmessage = (e) => {
     let d;
     try { d = JSON.parse(e.data); } catch (err) { return; }
-    if (d.type === 'message') {
+    if (d.type === 'typing') {
+      if (S.cur && Number(S.cur.id) === Number(d.conv_id) && Number(d.user_id) !== Number(S.me.id)) {
+        if (d.active) showTyping(); else hideTyping();
+      }
+    } else if (d.type === 'message_recalled') {
+      const hit = S.msgs.find((x) => Number(x.id) === Number(d.message_id));
+      if (hit && S.cur && Number(S.cur.id) === Number(d.conv_id)) {
+        hit.recalled = 1;
+        hit.body = '';
+        hit.media = null;
+        hit.recall_by = d.by;
+        renderMsgs();
+      }
+      loadConvs(true);
+    } else if (d.type === 'message') {
       if (S.cur && S.cur.id === d.conv_id) {
         appendMsg(d.message);
         if (document.visibilityState === 'visible') {
@@ -1309,26 +1628,56 @@ function chatSetting() {
       + '删除这个聊天</div></div></div>'
       + '</div>', '');
   } else {
-    const owner = Number(conv.created_by) === Number(S.me.id);
+    const role = conv.my_role || 'member';
+    const canEdit = role === 'owner' || role === 'admin';
+    const isOwner = role === 'owner';
+
+    const memberRows = (conv.members || []).map((m) => {
+      let tag = '';
+      if (m.member_role === 'owner') tag = '<span class="pill role">群主</span>';
+      else if (m.member_role === 'admin') tag = '<span class="pill role">管理员</span>';
+      const tappable = isOwner && Number(m.id) !== Number(S.me.id);
+      return '<div class="item"' + (tappable ? ' data-act="member-actions" data-id="' + m.id + '"' : '') + '>'
+        + avatar(m, 'sm') + '<div class="txt"><div class="t1">' + esc(displayName(m)) + tag
+        + '</div><div class="t2">@' + esc(m.username) + '</div></div>'
+        + (tappable ? '<span class="arrow">\u203a</span>' : '') + '</div>';
+    }).join('');
+
     openSheet('群聊设置',
       '<div class="gset-head">' + convAvatar(conv, 'lg')
       + '<div class="gset-info"><div class="gset-name">' + esc(conv.title) + '</div>'
       + '<div class="gset-sub">' + ((conv.members || []).length) + ' 人'
-      + (owner ? ' · 你是群主' : '') + '</div></div>'
-      + (owner ? '<button class="code-btn" data-act="pick-group-avatar">换头像</button>' : '')
+      + (isOwner ? ' · 你是群主' : (canEdit ? ' · 群管理员' : '')) + '</div></div>'
+      + (canEdit ? '<button class="code-btn" data-act="pick-group-avatar">换头像</button>' : '')
       + '</div>'
-      + (owner ? '<input type="file" id="gv-file" accept="image/*" hidden>' : '')
-      + '<div class="mini-form"><label>群名</label>'
-      + '<input id="gname-in" value="' + esc(conv.title) + '">'
-      + '<button class="btn" data-act="save-gname">保存群名</button></div>'
-      + '<div class="card" style="margin:0 14px 14px">'
-      + (conv.members || []).map((m) => '<div class="item" data-act="user-card" data-id="' + m.id + '">' + avatar(m, 'sm')
-          + '<div class="txt"><div class="t1">' + esc(displayName(m)) + '</div><div class="t2">@'
-          + esc(m.username) + '</div></div></div>').join('')
+      + (canEdit ? '<input type="file" id="gv-file" accept="image/*" hidden>' : '')
+
+      + (canEdit ? '<div class="mini-form"><label>群名</label>'
+        + '<input id="gname-in" value="' + esc(conv.title) + '">'
+        + '<button class="btn" data-act="save-gname">保存群名</button></div>' : '')
+
+      + '<div class="mini-form"><label>群公告</label>'
+      + (canEdit
+        ? '<textarea id="gnote-in" rows="3">' + esc(conv.notice || '') + '</textarea>'
+          + '<button class="btn" data-act="save-gnotice">保存群公告</button>'
+        : '<div class="set-note" style="margin:0">'
+          + (conv.notice ? esc(conv.notice) : '还没有群公告') + '</div>')
       + '</div>'
+
+      + '<div class="set-group-head">群成员（' + (conv.members || []).length + '）</div>'
+      + '<div class="card" style="margin:0 14px 14px">' + memberRows + '</div>'
+
+      + (S.me.is_admin
+        ? '<div class="set-group-head">消息留存（网站管理员）</div>'
+          + '<div class="mini-pw"><input id="ghist-in" type="number" value="'
+          + (conv.history_max || 200) + '"><button class="btn" data-act="save-ghist">保存</button></div>'
+          + '<div class="set-note">200 / 300 / 500 / 1000，只影响之后的消息。</div>'
+        : '')
+
       + '<div class="card" style="margin:0 14px 14px">'
-      + '<div class="item" data-act="del-conv"><div class="txt"><div class="t1" style="color:#c1503c">'
-      + '解散 / 退出群聊</div></div></div></div>', '');
+      + '<div class="item" data-act="' + (isOwner ? 'del-conv' : 'leave-conv') + '">'
+      + '<div class="txt"><div class="t1" style="color:#c1503c">'
+      + (isOwner ? '解散群聊' : '退出群聊') + '</div></div></div></div>', '');
     const gv = $('#gv-file');
     if (gv) gv.addEventListener('change', onGroupAvatarPicked);
   }
@@ -1613,16 +1962,16 @@ async function openUserCard(u) {
   }
 
   const tag = u.is_sub ? ' \u00b7 WSS' : (u.role === 'admin' ? ' \u00b7 \u7ba1\u7406\u5458' : '');
+  // 顶部沿用左侧抽屉那张卡片的样式：封面 + 暗角 + 方头像 + 名字 + @ID
   openSheet(null,
-    '<div class="ucard">'
-    + '<div class="ucard-hero">' + coverImg(u)
+    '<div class="profile-card ucard-top">' + coverImg(u)
     + '<div class="cover-scrim"></div>'
     + '<button class="ucard-close" data-close="1">\u2715</button>'
-    + '<img class="ucard-av" src="' + esc(avatarSrc(u) || ICON) + '" alt=""></div>'
-    + '<div class="ucard-body"><div class="ucard-name">' + esc(displayName(u)) + '</div>'
-    + '<div class="ucard-user">@' + esc(u.username) + esc(tag) + '</div></div>'
-    + '<div class="ucard-acts set-group" style="border-radius:0">' + acts + '</div>'
-    + '</div>', '', 'ucard-sheet');
+    + '<img class="profile-av" src="' + esc(avatarSrc(u) || ICON) + '" alt="">'
+    + '<div class="profile-name">' + esc(displayName(u)) + '</div>'
+    + '<div class="profile-id">@' + esc(u.username) + esc(tag) + '</div>'
+    + '</div>'
+    + '<div class="ucard-acts set-group" style="border-radius:0">' + acts + '</div>', '', 'ucard-sheet');
 }
 
 async function openAliasSheet(uid) {
@@ -1680,6 +2029,7 @@ document.addEventListener('pointerdown', (e) => {
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
+  if (longPressed) { longPressed = false; return; }
   const act = el.getAttribute('data-act');
   const id = el.getAttribute('data-id');
 
@@ -1696,6 +2046,52 @@ document.addEventListener('click', async (e) => {
     else if (act === 'pick-avatar') { const f = $('#av-file'); if (f) f.click(); }
     else if (act === 'pick-cover') { const f = $('#cover-file'); if (f) f.click(); }
     else if (act === 'pick-group-avatar') { const f = $('#gv-file'); if (f) f.click(); }
+    else if (act === 'pick-image') { const f = $('#img-file'); if (f) f.click(); }
+    else if (act === 'open-stickers') { await openStickers(); }
+    else if (act === 'send-sticker') { await sendSticker(Number(id)); }
+    else if (act === 'recall-msg') { await recallMsg(Number(id)); }
+    else if (act === 'hide-msg') { await hideMsg(Number(id)); }
+    else if (act === 'save-sticker') { await saveSticker(Number(id)); }
+    else if (act === 'view-image') { openViewImage(el.getAttribute('data-src')); }
+    else if (act === 'member-actions') { memberActions(Number(id)); }
+    else if (act === 'member-card') {
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      const mm = (S.cur.members || []).find((x) => Number(x.id) === Number(id));
+      if (mm) openUserCard(mm);
+    }
+    else if (act === 'set-role') {
+      const role = el.getAttribute('data-role');
+      await api('/api/conversations/' + S.cur.id + '/members/' + id + '/role', 'POST', { role: role });
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      await reloadConv();
+      toast(role === 'admin' ? '已设为群管理员' : '已取消管理员');
+      chatSetting();
+    }
+    else if (act === 'save-gnotice') {
+      const v = ($('#gnote-in') && $('#gnote-in').value || '').trim();
+      await api('/api/conversations/' + S.cur.id + '/notice', 'POST', { notice: v });
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      await reloadConv();
+      toast('群公告已保存');
+      chatSetting();
+    }
+    else if (act === 'save-ghist') {
+      const n = Number($('#ghist-in').value);
+      await api('/api/conversations/' + S.cur.id + '/history', 'POST', { history_max: n });
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      await reloadConv();
+      toast('已设为留存 ' + n + ' 条');
+      chatSetting();
+    }
+    else if (act === 'leave-conv') {
+      if (!confirm('确定退出这个群吗？')) return;
+      await api('/api/conversations/' + S.cur.id + '/leave', 'POST', {});
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      S.cur = null;
+      S.openId = null;
+      await loadConvs(true);
+      showList();
+    }
     else if (act === 'push-on') { await pushEnable(); }
     else if (act === 'push-off') { await pushDisable(); }
     else if (act === 'push-test') { await pushTest(); }
@@ -1912,6 +2308,26 @@ document.addEventListener('visibilitychange', () => {
   await loadConvs(true);
   await loadFriends();
   await loadAnns();
+  // 移动端键盘弹起时，用 visualViewport 的真实高度，让消息列表跟着缩
+  const vv = window.visualViewport;
+  if (vv) {
+    const syncH = () => {
+      document.documentElement.style.setProperty('--app-h', Math.round(vv.height) + 'px');
+      if (document.body.classList.contains('chat-open')) scrollBottom(true);
+    };
+    vv.addEventListener('resize', syncH);
+    vv.addEventListener('scroll', syncH);
+    syncH();
+  }
+
+  const inputEl = $('#input');
+  if (inputEl) {
+    inputEl.addEventListener('input', () => {
+      sendTyping(!!inputEl.value.trim());
+    });
+  }
+  const imgInput = $('#img-file');
+  if (imgInput) imgInput.addEventListener('change', onImagePicked);
   connectSSE();
   initPush().finally(() => {
     let tries = 0;

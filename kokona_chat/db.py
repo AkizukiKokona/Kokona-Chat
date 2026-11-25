@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   dm_key     TEXT,                                   -- direct 会话唯一键 "小id:大id"
   created_by INTEGER,
   avatar     TEXT NOT NULL DEFAULT '',               -- gv:<文件名>，群头像
+  notice     TEXT NOT NULL DEFAULT '',               -- 群公告（≠ 网站公告）
+  history_max INTEGER NOT NULL DEFAULT 0,            -- 云端留存条数，0 = 按默认规则
   created_at INTEGER NOT NULL,
   last_at    INTEGER NOT NULL DEFAULT 0              -- 方便按最近活跃排序
 );
@@ -49,6 +51,7 @@ CREATE TABLE IF NOT EXISTS conversation_members (
   conv_id   INTEGER NOT NULL,
   user_id   INTEGER NOT NULL,
   alias     TEXT NOT NULL DEFAULT '',                -- 我对这个会话的备注
+  role      TEXT NOT NULL DEFAULT 'member',          -- owner / admin / member（群内角色）
   joined_at INTEGER NOT NULL,
   PRIMARY KEY (conv_id, user_id)
 );
@@ -58,6 +61,10 @@ CREATE TABLE IF NOT EXISTS messages (
   conv_id    INTEGER NOT NULL,
   sender_id  INTEGER,
   body       TEXT NOT NULL,
+  kind       TEXT NOT NULL DEFAULT 'text',           -- text / image
+  media_id   INTEGER,
+  recalled   INTEGER NOT NULL DEFAULT 0,
+  recall_by  INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conv_id, id);
@@ -108,6 +115,30 @@ CREATE TABLE IF NOT EXISTS email_codes (
   used       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_codes_email ON email_codes(email, purpose, created_at);
+
+CREATE TABLE IF NOT EXISTS media (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  hash       TEXT NOT NULL UNIQUE,                   -- sha1(webp)，同图只存一份
+  bytes      INTEGER NOT NULL,
+  w          INTEGER NOT NULL DEFAULT 0,
+  h          INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS stickers (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL,
+  media_id   INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, media_id)
+);
+
+-- 本地删除：只对这个人隐藏，别人照常看到
+CREATE TABLE IF NOT EXISTS msg_hidden (
+  user_id INTEGER NOT NULL,
+  msg_id  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, msg_id)
+);
 
 CREATE TABLE IF NOT EXISTS push_subs (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,6 +214,21 @@ def _migrate():
         run("ALTER TABLE conversations ADD COLUMN last_at INTEGER NOT NULL DEFAULT 0")
     if "avatar" not in cols:
         run("ALTER TABLE conversations ADD COLUMN avatar TEXT NOT NULL DEFAULT ''")
+    if "notice" not in cols:
+        run("ALTER TABLE conversations ADD COLUMN notice TEXT NOT NULL DEFAULT ''")
+    if "history_max" not in cols:
+        run("ALTER TABLE conversations ADD COLUMN history_max INTEGER NOT NULL DEFAULT 0")
+
+    mcols = {row["name"] for row in qall("PRAGMA table_info(conversation_members)")}
+    if "role" not in mcols:
+        run("ALTER TABLE conversation_members ADD COLUMN role TEXT NOT NULL DEFAULT 'member'")
+
+    gcols = {row["name"] for row in qall("PRAGMA table_info(messages)")}
+    if "kind" not in gcols:
+        run("ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'")
+        run("ALTER TABLE messages ADD COLUMN media_id INTEGER")
+        run("ALTER TABLE messages ADD COLUMN recalled INTEGER NOT NULL DEFAULT 0")
+        run("ALTER TABLE messages ADD COLUMN recall_by INTEGER")
     run(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_dm "
         "ON conversations(dm_key) WHERE dm_key IS NOT NULL"
@@ -191,6 +237,11 @@ def _migrate():
     ucols = {row["name"] for row in qall("PRAGMA table_info(users)")}
     if "cover" not in ucols:
         run("ALTER TABLE users ADD COLUMN cover TEXT NOT NULL DEFAULT ''")
+
+    # WSS 专属聊天统一叫「心夏」
+    run("UPDATE conversations SET title = '心夏' WHERE kind = 'pkn' "
+        "AND (title = '' OR title IN ('我的 WSS 聊天', '频道 1'))")
+    run("UPDATE conversations SET history_max = 200 WHERE kind IN ('pkn', 'direct') AND history_max = 0")
 
     # 子账号不再单独占一个用户名：统一改成隐藏名 ~sub:<id>，
     # 对外只认「主账号用户名 + 子账号密码」。

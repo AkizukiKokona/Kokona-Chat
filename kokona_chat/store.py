@@ -11,6 +11,12 @@ from . import config, db
 
 # ---------------------------------------------------------------- 权限
 
+# 云端留存条数：私聊/PKN 200，管理员建的群 300，可在建群时写进 history_max
+HISTORY_DEFAULT = 200
+HISTORY_ADMIN_GROUP = 300
+RECALL_WINDOW = 5 * 60          # 本人撤回时限（秒）
+
+
 def _row(row):
     return dict(row) if row is not None else None
 
@@ -59,9 +65,9 @@ def get_or_create_dm(a, b):
         return int(row["id"])
     t = db.now()
     cur = db.run(
-        "INSERT INTO conversations (kind, title, dm_key, created_by, created_at, last_at) "
-        "VALUES ('direct', '', ?, ?, ?, ?)",
-        (key, int(a), t, t),
+        "INSERT INTO conversations (kind, title, dm_key, created_by, history_max, created_at, last_at) "
+        "VALUES ('direct', '', ?, ?, ?, ?, ?)",
+        (key, int(a), HISTORY_DEFAULT, t, t),
     )
     cid = int(cur.lastrowid)
     for uid in (int(a), int(b)):
@@ -74,17 +80,20 @@ def get_or_create_dm(a, b):
 
 def create_group(owner_id, title, member_ids):
     t = db.now()
+    owner = db.qone("SELECT role FROM users WHERE id = ?", (int(owner_id),))
+    limit = HISTORY_ADMIN_GROUP if (owner is not None and owner["role"] == "admin") else HISTORY_DEFAULT
     cur = db.run(
-        "INSERT INTO conversations (kind, title, created_by, created_at, last_at) "
-        "VALUES ('group', ?, ?, ?, ?)",
-        (str(title or "新群聊").strip()[:60] or "新群聊", int(owner_id), t, t),
+        "INSERT INTO conversations (kind, title, created_by, history_max, created_at, last_at) "
+        "VALUES ('group', ?, ?, ?, ?, ?)",
+        (str(title or "新群聊").strip()[:60] or "新群聊", int(owner_id), limit, t, t),
     )
     cid = int(cur.lastrowid)
     ids = {int(owner_id)} | {int(x) for x in (member_ids or [])}
     for uid in ids:
+        role = "owner" if uid == int(owner_id) else "member"
         db.run(
-            "INSERT OR IGNORE INTO conversation_members (conv_id, user_id, joined_at) VALUES (?, ?, ?)",
-            (cid, uid, t),
+            "INSERT OR IGNORE INTO conversation_members (conv_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)",
+            (cid, uid, role, t),
         )
     return cid
 
@@ -103,9 +112,63 @@ def is_member(conv_id, user_id):
     return row is not None
 
 
+def history_limit(conv):
+    """这个会话云端留多少条。0 或缺失时按默认。"""
+    if conv is None:
+        return HISTORY_DEFAULT
+    try:
+        keep = int(conv["history_max"] or 0)
+    except (IndexError, KeyError, TypeError):
+        keep = 0
+    return keep if keep > 0 else HISTORY_DEFAULT
+
+
+def member_role(conv_id, user_id):
+    row = db.qone(
+        "SELECT role FROM conversation_members WHERE conv_id = ? AND user_id = ?",
+        (int(conv_id), int(user_id)),
+    )
+    return (row["role"] if row is not None else "") or "member"
+
+
+def is_owner(conv, user_id):
+    return conv is not None and int(conv["created_by"] or 0) == int(user_id)
+
+
+def can_moderate(conv, user_id):
+    """群主 / 群管理员。只对群有效，跟网站 admin 无关。"""
+    if conv is None or conv["kind"] != "group":
+        return False
+    return member_role(conv["id"], user_id) in ("owner", "admin")
+
+
+def can_edit_group(conv, user_id):
+    if conv is None or conv["kind"] != "group":
+        return False
+    return member_role(conv["id"], user_id) in ("owner", "admin")
+
+
+def set_member_role(conv_id, user_id, role):
+    if role not in ("owner", "admin", "member"):
+        return False
+    db.run(
+        "UPDATE conversation_members SET role = ? WHERE conv_id = ? AND user_id = ?",
+        (role, int(conv_id), int(user_id)),
+    )
+    return True
+
+
+def set_notice(conv_id, text):
+    db.run("UPDATE conversations SET notice = ? WHERE id = ?", (str(text or "")[:1000], int(conv_id)))
+
+
+def set_history_max(conv_id, keep):
+    db.run("UPDATE conversations SET history_max = ? WHERE id = ?", (int(keep), int(conv_id)))
+
+
 def members(conv_id):
     return db.qall(
-        "SELECT u.*, m.alias AS alias FROM conversation_members m "
+        "SELECT u.*, m.alias AS alias, m.role AS member_role FROM conversation_members m "
         "JOIN users u ON u.id = m.user_id WHERE m.conv_id = ? ORDER BY u.id",
         (int(conv_id),),
     )
@@ -173,6 +236,9 @@ def list_conversations(user_id):
             "title": conv["title"],
             "alias": conv["alias"] or "",
             "avatar": conv["avatar"] or "",
+            "notice": _opt(conv, "notice"),
+            "history_max": history_limit(conv),
+            "my_role": member_role(conv["id"], user_id),
             "created_by": conv["created_by"],
             "last_at": conv["last_at"],
         }
@@ -246,59 +312,182 @@ def mark_read(conv_id, user_id, last_id=None):
 
 # ---------------------------------------------------------------- 消息
 
-def append_message(conv_id, sender_id, body):
-    body = str(body or "").strip()
-    if not body:
+def media_url(hash_value):
+    return "%s/m/%s.webp" % (config.SITE_URL, hash_value)
+
+
+def media_brief(row):
+    if row is None:
         return None
-    body = body[:4000]
+    return {
+        "id": row["id"],
+        "url": media_url(row["hash"]),
+        "w": row["w"],
+        "h": row["h"],
+        "bytes": row["bytes"],
+    }
+
+
+def upsert_media(hash_value, size, width, height):
+    """按内容哈希去重：同一张图全服只存一份。"""
+    row = db.qone("SELECT * FROM media WHERE hash = ?", (hash_value,))
+    if row is not None:
+        return row
+    cur = db.run(
+        "INSERT INTO media (hash, bytes, w, h, created_at) VALUES (?, ?, ?, ?, ?)",
+        (hash_value, int(size), int(width or 0), int(height or 0), db.now()),
+    )
+    return db.qone("SELECT * FROM media WHERE id = ?", (int(cur.lastrowid),))
+
+
+def message_item(r):
+    """统一的消息形状：撤回后只留占位，不带正文和图片。"""
+    recalled = int(_opt(r, "recalled") or 0) == 1
+    item = {
+        "id": r["id"],
+        "conv_id": r["conv_id"],
+        "sender_id": r["sender_id"] or 0,
+        "kind": "text" if recalled else (_opt(r, "kind") or "text"),
+        "body": "" if recalled else (r["body"] or ""),
+        "media": None,
+        "recalled": 1 if recalled else 0,
+        "recall_by": int(_opt(r, "recall_by") or 0),
+        "created_at": r["created_at"],
+        "sender": user_brief(r) if "username" in r.keys() and r["username"] else None,
+    }
+    if not recalled and _opt(r, "media_id"):
+        item["media"] = media_brief(db.qone("SELECT * FROM media WHERE id = ?", (int(r["media_id"]),)))
+    return item
+
+
+def append_message(conv_id, sender_id, body, kind="text", media_id=None):
+    body = str(body or "").strip()[:4000]
+    if kind == "text" and not body:
+        return None
+    if kind == "image" and not media_id:
+        return None
     t = db.now()
     cur = db.run(
-        "INSERT INTO messages (conv_id, sender_id, body, created_at) VALUES (?, ?, ?, ?)",
-        (int(conv_id), None if sender_id is None else int(sender_id), body, t),
+        "INSERT INTO messages (conv_id, sender_id, body, kind, media_id, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (int(conv_id), None if sender_id is None else int(sender_id), body,
+         "image" if kind == "image" else "text",
+         int(media_id) if media_id else None, t),
     )
     mid = int(cur.lastrowid)
     db.run("UPDATE conversations SET last_at = ? WHERE id = ?", (t, int(conv_id)))
     _trim(conv_id)
-    sender = db.qone("SELECT * FROM users WHERE id = ?", (int(sender_id),)) if sender_id else None
-    return {
-        "id": mid,
-        "conv_id": int(conv_id),
-        "sender_id": int(sender_id) if sender_id else 0,
-        "sender": user_brief(sender),
-        "body": body,
-        "created_at": t,
+    row = db.qone(
+        "SELECT m.*, u.username, u.display_name, u.avatar, u.cover, u.is_sub, u.role "
+        "FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.id = ?",
+        (mid,),
+    )
+    return message_item(row) if row is not None else None
+
+
+def recall_message(msg_id, user):
+    """撤回：本人 5 分钟内；群主/群管理员对本群不限时。返回 (ok, error, event)。"""
+    row = db.qone("SELECT * FROM messages WHERE id = ?", (int(msg_id),))
+    if row is None:
+        return False, "消息不存在", None
+    if int(_opt(row, "recalled") or 0) == 1:
+        return True, "", None
+    conv = conv_row(row["conv_id"])
+    mine = int(row["sender_id"] or 0) == int(user["id"])
+    mod = can_moderate(conv, user["id"])
+    if mine:
+        if not mod and db.now() - int(row["created_at"]) > RECALL_WINDOW:
+            return False, "超过 5 分钟，不能撤回", None
+        scope = "self"
+    elif mod:
+        scope = "admin"
+    else:
+        return False, "没有权限撤回这条消息", None
+    db.run("UPDATE messages SET recalled = 1, recall_by = ? WHERE id = ?", (int(user["id"]), int(msg_id)))
+    return True, "", {
+        "message_id": int(msg_id),
+        "conv_id": int(row["conv_id"]),
+        "by": int(user["id"]),
+        "sender_id": int(row["sender_id"] or 0),
+        "scope": scope,
     }
 
 
 def _trim(conv_id):
-    """云端只留最近 N 条；更早的直接删。"""
+    """云端只留这个会话的 N 条；更早的直接删。"""
+    keep = history_limit(conv_row(conv_id))
     cut = db.qone(
         "SELECT id FROM messages WHERE conv_id = ? ORDER BY id DESC LIMIT 1 OFFSET ?",
-        (int(conv_id), int(config.HISTORY_MAX)),
+        (int(conv_id), int(keep)),
     )
     if cut is not None:
         db.run("DELETE FROM messages WHERE conv_id = ? AND id <= ?", (int(conv_id), int(cut["id"])))
 
 
-def recent_messages(conv_id, limit=None):
-    limit = int(limit or config.HISTORY_MAX)
+def recent_messages(conv_id, limit=None, viewer_id=None):
+    conv = conv_row(conv_id)
+    limit = int(limit or history_limit(conv))
+    if viewer_id:
+        rows = db.qall(
+            "SELECT m.*, u.username, u.display_name, u.avatar, u.cover, u.is_sub, u.role "
+            "FROM messages m LEFT JOIN users u ON u.id = m.sender_id "
+            "WHERE m.conv_id = ? AND NOT EXISTS "
+            "  (SELECT 1 FROM msg_hidden h WHERE h.msg_id = m.id AND h.user_id = ?) "
+            "ORDER BY m.id DESC LIMIT ?",
+            (int(conv_id), int(viewer_id), limit),
+        )
+    else:
+        rows = db.qall(
+            "SELECT m.*, u.username, u.display_name, u.avatar, u.cover, u.is_sub, u.role "
+            "FROM messages m LEFT JOIN users u ON u.id = m.sender_id "
+            "WHERE m.conv_id = ? ORDER BY m.id DESC LIMIT ?",
+            (int(conv_id), limit),
+        )
+    return [message_item(r) for r in reversed(rows)]
+
+
+def hide_message(user_id, msg_id):
+    """本地删除：只对这个人隐藏。"""
+    row = db.qone("SELECT conv_id FROM messages WHERE id = ?", (int(msg_id),))
+    if row is None:
+        return False
+    if not is_member(row["conv_id"], user_id):
+        return False
+    db.run("INSERT OR IGNORE INTO msg_hidden (user_id, msg_id) VALUES (?, ?)", (int(user_id), int(msg_id)))
+    return True
+
+
+# ---------------------------------------------------------------- 表情包
+
+STICKER_LIMIT = 122
+
+
+def stickers_of(user_id):
     rows = db.qall(
-        "SELECT m.*, u.username, u.display_name, u.avatar, u.cover, u.is_sub, u.role "
-        "FROM messages m LEFT JOIN users u ON u.id = m.sender_id "
-        "WHERE m.conv_id = ? ORDER BY m.id DESC LIMIT ?",
-        (int(conv_id), limit),
+        "SELECT s.id AS sid, m.* FROM stickers s JOIN media m ON m.id = s.media_id "
+        "WHERE s.user_id = ? ORDER BY s.id DESC",
+        (int(user_id),),
     )
-    items = []
-    for r in reversed(rows):
-        items.append({
-            "id": r["id"],
-            "conv_id": r["conv_id"],
-            "sender_id": r["sender_id"] or 0,
-            "body": r["body"],
-            "created_at": r["created_at"],
-            "sender": user_brief(r) if r["username"] else None,
-        })
-    return items
+    out = []
+    for r in rows:
+        item = media_brief(r)
+        item["sticker_id"] = r["sid"]
+        out.append(item)
+    return out
+
+
+def add_sticker(user_id, media_id):
+    db.run(
+        "INSERT OR IGNORE INTO stickers (user_id, media_id, created_at) VALUES (?, ?, ?)",
+        (int(user_id), int(media_id), db.now()),
+    )
+    row = db.qone("SELECT COUNT(*) AS n FROM stickers WHERE user_id = ?", (int(user_id),))
+    return int(row["n"]) if row else 0
+
+
+def del_sticker(user_id, sticker_id):
+    db.run("DELETE FROM stickers WHERE user_id = ? AND id = ?", (int(user_id), int(sticker_id)))
+    return True
 
 
 # ---------------------------------------------------------------- 好友 / 黑名单
@@ -442,7 +631,7 @@ def unread_announcements(user_id):
 
 # ---------------------------------------------------------------- PKN 专属聊天
 
-PKN_TITLE = "我的 WSS 聊天"
+PKN_TITLE = "心夏"
 
 
 def get_or_create_pkn(user_id):
@@ -488,9 +677,9 @@ def get_or_create_pkn(user_id):
 
     t = db.now()
     cur = db.run(
-        "INSERT INTO conversations (kind, title, dm_key, created_by, created_at, last_at) "
-        "VALUES ('pkn', ?, ?, ?, ?, ?)",
-        (PKN_TITLE, key, int(user_id), t, t),
+        "INSERT INTO conversations (kind, title, dm_key, created_by, history_max, created_at, last_at) "
+        "VALUES ('pkn', ?, ?, ?, ?, ?, ?)",
+        (PKN_TITLE, key, int(user_id), HISTORY_DEFAULT, t, t),
     )
     cid = int(cur.lastrowid)
     db.run(
