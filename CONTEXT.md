@@ -111,6 +111,12 @@ kokonachat/
   对策：聚焦后 6 秒内每 0.5s 再对一次表（`fitTick`），blur 立刻停。
   如果对表也拿不到正确值，说明 `vv.height` 本身就不可信，那时看 `bad` 日志里的
   `vh / vbot / ab / cb` 再决定，别再拍脑袋。
+- **视口报 0 的兜底必须所有页面都有，不只是聊天页**：登录/注册/找回/管理后台是独立页面，
+  没有 `.app`，之前完全没有视口处理，遇到同一个宿主缺陷（键盘 insets 减两遍 → 视口报 0）
+  时 `height:100%` 塌成 0，整页空白输入框点不了。现在 `VIEWPORT_GUARD_JS` 注入 `_doc()`，
+  检测到 `.app` 就跳过（聊天页有自己的 `deadGuard`）；独立页面用 `(上次正常高度+上报值)/2`
+  反推写到 `--page-h`，`html{height:var(--page-h,100%)}`，真值回来立刻移除。
+- 管理后台内容长，`body` 必须 `overflow-y:auto`，否则 `overflow:hidden` 把表单全裁掉滚不到底。
 - 诊断里的 `geom`/`bad` 只观测不干预：`geom` 记 innerHeight / vv.height / scale / app 实际矩形；
   页面比屏幕矮 40px 以上会强制上报 `bad`（就是「多一片白」的形态），下次复发直接看日志。
 - 前端诊断：地址加 `?diag=1` 全量上报；触摸设备默认只在 `err` / `rej` / `bad`（布局自检发现

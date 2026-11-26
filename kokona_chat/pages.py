@@ -18,7 +18,8 @@ BASE_CSS = """
   --ta-max:102px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;overscroll-behavior:none}
+html{margin:0;padding:0;height:var(--page-h,100%);overflow:hidden;overscroll-behavior:none}
+body{margin:0;padding:0;height:100%;overflow:hidden;overscroll-behavior:none}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
   background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
@@ -384,6 +385,41 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none;user-select:none}
 """
 
 
+VIEWPORT_GUARD_JS = r"""
+/* 登录/注册/找回/管理后台等独立页面的视口兜底。
+   聊天页 APP_JS 里已有同源的 deadGuard/fitIosKeyboard，检测到 .app 就直接跳过，互不干扰。
+   只做一件事：浏览器把视口报成 0（宿主把键盘 insets 减两遍，已知缺陷）时，
+   用 (上次正常高度 + 上报值)/2 反推可见高度顶住 html，避免 height:100% 塌成 0 导致整页空白；
+   真值回来立刻交回 CSS。 */
+(function(){
+  if (document.querySelector('.app')) return;
+  var vv = window.visualViewport;
+  var root = document.documentElement;
+  var lastGood = Math.round(window.innerHeight || 0);
+  var deadFix = false;
+  function guard(){
+    var lh = Math.round(window.innerHeight || 0);
+    var vh = Math.round((vv ? vv.height : lh) || 0);
+    if (lh > 80) lastGood = lh;
+    if (lh >= 80) {
+      if (deadFix) { deadFix = false; root.style.removeProperty('--page-h'); }
+      return;
+    }
+    if (lastGood > 80) {
+      var vhSafe = Math.max(0, Math.min(vh, lastGood));
+      var h = Math.max(110, Math.round((lastGood + vhSafe) / 2));
+      deadFix = true;
+      root.style.setProperty('--page-h', h + 'px');
+    }
+  }
+  guard();
+  if (vv) { vv.addEventListener('resize', guard); vv.addEventListener('scroll', guard); }
+  window.addEventListener('resize', guard);
+  window.addEventListener('orientationchange', function(){ setTimeout(guard, 240); });
+  setInterval(function(){ if (!document.hidden) guard(); }, 700);
+})();
+"""
+
 def _doc(title, body, extra_css="", extra_js="", base=None):
     if base is None:
         base = config.BASE or ""
@@ -401,7 +437,8 @@ def _doc(title, body, extra_css="", extra_js="", base=None):
 %s
 <script>window.BASE=%s;</script>
 <script>%s</script>
-</body></html>""" % (icon, icon, title, BASE_CSS, extra_css, body, j(base), extra_js)
+<script>%s</script>
+</body></html>""" % (icon, icon, title, BASE_CSS, extra_css, body, j(base), VIEWPORT_GUARD_JS, extra_js)
 
 
 # ================================================================ 登录
@@ -3373,6 +3410,7 @@ def app_page(user, store=None, hub=None, base=None):
 # ================================================================ 管理后台
 
 ADMIN_CSS = """
+body{overflow-y:auto;overscroll-behavior:auto}
 .admin{max-width:960px;margin:0 auto;padding:18px 16px 60px}
 .admin header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 .admin header b{font-size:18px}
