@@ -80,11 +80,14 @@ def create_user(username, password, email=None, role="user", is_sub=0, parent_id
     return cur.lastrowid
 
 
-def authenticate(username, password):
+def authenticate(username, password, allow_sub=True):
     """返回 (user_row, error)。error 是给用户看的中文说明。
 
     WSS 子账号不再有自己的用户名：用「主账号用户名 + 子账号密码」登录。
     所以主账号密码不对时，再拿同一串密码去比对该账号名下的子账号。
+
+    allow_sub=False 时**不接受子账号**：HTTP 登录只能用主账号，
+    子账号只允许走 WSS 专有协议（这是它唯一的入口）。
     """
     row = find_by_username(username)
     if row is not None:
@@ -93,9 +96,10 @@ def authenticate(username, password):
         if verify_password(password, row["password_hash"]):
             return row, ""
         # 子账号走同一个用户名
-        sub = _match_sub(row["id"], password)
-        if sub is not None:
-            return sub, ""
+        if allow_sub:
+            sub = _match_sub(row["id"], password)
+            if sub is not None:
+                return sub, ""
         return None, "账号或密码不正确"
 
     # 也允许用邮箱登录
@@ -105,9 +109,10 @@ def authenticate(username, password):
     if row["status"] == "banned":
         return None, "这个账号已被封禁"
     if not verify_password(password, row["password_hash"]):
-        sub = _match_sub(row["id"], password)
-        if sub is not None:
-            return sub, ""
+        if allow_sub:
+            sub = _match_sub(row["id"], password)
+            if sub is not None:
+                return sub, ""
         return None, "账号或密码不正确"
     return row, ""
 

@@ -228,6 +228,15 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none;user-select:none}
 .item .t1{font-size:15px}
 .item .t2{font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .arrow{color:#c8c8c8;font-size:18px}
+/* WSS 身份行：头像 + 名字 + 说明，点进去可改 */
+.wss-av{width:38px;height:38px;border-radius:10px;object-fit:cover;flex:0 0 auto;
+  background:#efe4d0;border:1px solid rgba(0,0,0,.05)}
+.wss-card{display:flex;align-items:center;gap:12px;padding:16px 16px 6px}
+.wss-card .txt{flex:1;min-width:0}
+.wss-card .t1{font-size:16px;font-weight:600}
+.wss-card .t2{font-size:12px;color:var(--sub);margin-top:3px}
+.wss-big{width:60px;height:60px;border-radius:14px;object-fit:cover;flex:0 0 auto;
+  background:#efe4d0;border:1px solid rgba(0,0,0,.05)}
 .pill{font-size:11px;padding:2px 7px;border-radius:6px;background:#f6ecdb;color:var(--brand-d)}
 .pill.warn{background:#fbeee8;color:var(--danger)}
 .pill.gray{background:#f2ead9;color:var(--sub)}
@@ -2217,30 +2226,30 @@ function renderSettings() {
   const tag = me.is_admin ? ' \u00b7 \u7ba1\u7406\u5458' : (isSub ? ' \u00b7 \u5b50\u8d26\u53f7' : '');
   const url = wssEndpoint();
 
+  // WSS 身份：依附在本主账号下面的那个子账号（唯一）。不是「注册」出来的东西。
   let wss = '';
   if (isSub) {
-    wss = '<div class="set-note">\u5b50\u8d26\u53f7\u4e0d\u80fd\u518d\u521b\u5efa WSS \u8d26\u53f7\u3002</div>';
+    wss = '<div class="set-note">你正用这个 WSS 身份登录，资料由主账号那边管理。</div>';
   } else if (S.subs.length) {
-    const s = S.subs[0];
-    wss = '<div class="item"><div class="txt"><div class="t1">\u663e\u793a\u540d</div>'
-      + '<div class="t2">' + esc(s.display_name) + '</div></div></div>'
-      + '<div class="mini-pw"><input id="sub-dn" maxlength="30" value="' + esc(s.display_name) + '">'
-      + '<button class="btn" data-act="save-sub-dn" data-id="' + s.id + '">\u6539\u540d</button></div>'
-      + '<div class="mini-pw"><input id="sub-pw" type="password" placeholder="\u65b0\u5bc6\u7801\uff08\u22656 \u4f4d\uff0c\u7559\u7a7a\u4e0d\u6539\uff09">'
-      + '<button class="btn" data-act="save-sub-pw" data-id="' + s.id + '">\u91cd\u8bbe</button></div>'
-      + '<div class="item" data-act="del-sub" data-id="' + s.id + '"><div class="txt">'
-      + '<div class="t1" style="color:var(--danger)">\u5220\u9664 WSS \u8d26\u53f7</div>'
-      + '<div class="t2">\u548c\u5b83\u7684\u804a\u5929\u8bb0\u5f55\u4f1a\u7559\u4e0b</div></div></div>'
-      + '<div class="set-note">\u7528\u6237\u540d\u8ddf\u4e3b\u8d26\u53f7\u5171\u7528\uff0c\u53ea\u9700\u8981\u5bc6\u7801\uff1a<br><code>'
-      + esc(url) + '?user=' + esc(me.username) + '&amp;pass=\u5bc6\u7801</code></div>';
+    const it = S.subs[0];
+    wss = '<div class="item" data-act="edit-wss" data-id="' + it.id + '">'
+      + '<img class="wss-av" src="' + esc(avatarSrc(it) || ICON) + '" alt="">'
+      + '<div class="txt"><div class="t1">' + esc(it.display_name) + '</div>'
+      + '<div class="t2">@' + esc(it.username) + ' · 独立密码</div></div>'
+      + '<span class="arrow">›</span></div>'
+      + '<div class="set-note">连接地址：<br><code>'
+      + esc(url) + '?user=' + esc(it.username) + '&amp;pass=密码</code><br>'
+      + '只能走这个专有协议，不能用来登网站；'
+      + '也不能加好友、建群或被拉进群。</div>';
   } else if (S.subCanCreate) {
-    wss = '<div class="mini-pw"><input id="sub-dn-new" maxlength="30" placeholder="\u663e\u793a\u540d\uff08\u53ef\u7559\u7a7a\uff09"></div>'
-      + '<div class="mini-pw"><input id="sub-pw-new" type="password" placeholder="\u5bc6\u7801\uff08\u22656 \u4f4d\uff09">'
-      + '<button class="btn" data-act="new-sub">\u521b\u5efa</button></div>'
-      + '<div class="set-note">\u4e0d\u4f1a\u65b0\u6ce8\u518c\u4e00\u4e2a\u8d26\u53f7\uff1a\u7528\u6237\u540d\u4ecd\u662f\u4f60\u81ea\u5df1\u7684\uff0c\u53ea\u662f\u591a\u4e00\u4e2a\u5bc6\u7801\u3002\u8fde <code>'
-      + esc(url) + '</code> \u65f6\u7528 <code>user=' + esc(me.username) + '</code>\u3002</div>';
+    wss = '<div class="item" data-act="new-sub-open"><div class="txt">'
+      + '<div class="t1">开通 WSS 身份</div>'
+      + '<div class="t2">一个用户名、一套独立密码</div></div>'
+      + '<span class="arrow">›</span></div>'
+      + '<div class="set-note">开通后会在这里显示它的头像和名字，'
+      + '可以随时改。</div>';
   } else {
-    wss = '<div class="set-note">\u5f53\u524d\u8d26\u53f7\u4e0d\u80fd\u518d\u521b\u5efa WSS \u8d26\u53f7\u3002</div>';
+    wss = '<div class="set-note">当前账号不能再开通 WSS 身份。</div>';
   }
 
   showPanel('\u8bbe\u7f6e',
@@ -2262,7 +2271,7 @@ function renderSettings() {
       + esc(me.email) + '</div></div></div>' : '')
     + '</div>'
 
-    + '<div class="set-group"><div class="set-group-head">WSS \u8d26\u53f7</div>' + wss + '</div>'
+    + '<div class="set-group"><div class="set-group-head">WSS \u8eab\u4efd</div>' + wss + '</div>'
 
     + '<div class="set-group"><div class="set-group-head">通知</div>' + pushRow() + '</div>'
     + '<div class="set-group"><div class="set-group-head">\u8d26\u53f7\u5b89\u5168</div>'
@@ -2307,6 +2316,58 @@ function applyMe(u) {
   renderDrawer();
 }
 
+/* ---------------- WSS 身份 ---------------- */
+
+/** 找某个 WSS 子身份。 */
+function wssIdentity(id) {
+  const n = Number(id);
+  return S.subs.find((x) => Number(x.id) === n) || null;
+}
+
+/** 点身份卡片：打开资料面板，头像/名字/密码都能改。 */
+function openWssIdentity(id) {
+  const it = wssIdentity(id);
+  if (!it) return;
+  const url = wssEndpoint();
+  openSheet('WSS 身份',
+    '<div class="wss-card"><img class="wss-big" src="' + esc(avatarSrc(it) || ICON) + '" alt="">'
+    + '<div class="txt"><div class="t1">' + esc(it.display_name) + '</div>'
+    + '<div class="t2">@' + esc(it.username) + ' · 独立密码</div></div></div>'
+    + '<div class="mini-form"><label>显示名</label>'
+    + '<input id="wss-dn" maxlength="30" value="' + esc(it.display_name) + '">'
+    + '<button class="btn" data-act="save-wss-dn" data-id="' + it.id + '">保存</button></div>'
+    + '<div class="mini-form"><label>头像</label>'
+    + '<button class="btn" data-act="pick-wss-avatar" data-id="' + it.id + '">换头像</button></div>'
+    + '<div class="mini-form"><label>密码</label>'
+    + '<input id="wss-pw" type="password" placeholder="新密码，至少 6 位" autocomplete="new-password">'
+    + '<button class="btn" data-act="save-wss-pw" data-id="' + it.id + '">重设</button></div>'
+    + '<div class="set-note">连接地址：<br><code>' + esc(url) + '?user=' + esc(it.username)
+    + '&amp;pass=这个身份的密码</code></div>'
+    + '<div class="item" data-act="del-sub" data-id="' + it.id + '"><div class="txt">'
+    + '<div class="t1" style="color:var(--danger)">删除这个身份</div>'
+    + '<div class="t2">聊天记录会留下</div></div></div>', '');
+}
+
+/** 开通一个独立密码的 WSS 身份。 */
+function openNewSub() {
+  openSheet('开通 WSS 身份',
+    '<div class="mini-form"><label>显示名</label>'
+    + '<input id="sub-dn-new" maxlength="30" placeholder="默认：心夏">'
+    + '<label>密码</label>'
+    + '<input id="sub-pw-new" type="password" placeholder="至少 6 位" autocomplete="new-password">'
+    + '<button class="btn" data-act="new-sub">开通</button></div>'
+    + '<div class="set-note">用户名不变，还是你自己的；只是多一套密码。'
+    + '开通后可以单独改它的头像和名字，只能走 WSS 协议，不能拿来登网站。</div>', '');
+}
+
+function pickWssAvatar(id) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.onchange = pickImage((src) => { CROP.subId = Number(id) || 0; openCropper(src, 'wss'); });
+  inp.click();
+}
+
 function editName() {
   openSheet('修改显示名',
     '<div class="mini-form"><label>显示名</label>'
@@ -2325,7 +2386,7 @@ function changePassword() {
 
 /* ---------------- 头像：选图 → 拖动/缩放裁剪 → 转 webp 上传 ---------------- */
 
-const CROP = { img: null, mode: 'avatar', zoom: 1, x: 0, y: 0, base: 1, w: 0, h: 0, bw: 0, bh: 0 };
+const CROP = { img: null, mode: 'avatar', subId: 0, zoom: 1, x: 0, y: 0, base: 1, w: 0, h: 0, bw: 0, bh: 0 };
 
 function pickImage(handler) {
   return (e) => {
@@ -2374,7 +2435,7 @@ function openCropper(src, mode) {
   const box = $('#crop-box'), img = $('#crop-img'), range = $('#crop-zoom');
   if (!box || !img || !range) return;
 
-  CROP.img = img; CROP.mode = cover ? 'cover' : (mode === 'group' ? 'group' : 'avatar');
+  CROP.img = img; CROP.mode = cover ? 'cover' : (mode === 'group' ? 'group' : (mode === 'wss' ? 'wss' : 'avatar'));
   CROP.zoom = 1; CROP.x = 0; CROP.y = 0;
 
   const start = () => {
@@ -2453,6 +2514,17 @@ async function saveCrop() {
       document.querySelectorAll('.mask').forEach((m) => m.remove());
       toast('群头像已更新');
       chatSetting();
+      return;
+    }
+    if (mode === 'wss') {
+      const sid = CROP.subId || 0;
+      const d = await api('/api/avatar', 'POST', { data: data, sub_id: sid });
+      const it = wssIdentity(sid);
+      if (it) it.avatar = (d.sub && d.sub.avatar) || it.avatar;
+      await loadSubs();
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      toast('头像已更新');
+      openWssIdentity(sid);
       return;
     }
     const d = await api(cover ? '/api/cover' : '/api/avatar', 'POST', { data: data });
@@ -2767,13 +2839,37 @@ document.addEventListener('click', async (e) => {
       await loadConvs(true);
       showList();
     }
+    else if (act === 'edit-wss') { openWssIdentity(id); }
+    else if (act === 'new-sub-open') { openNewSub(); }
+    else if (act === 'pick-wss-avatar') { pickWssAvatar(id); }
+    else if (act === 'save-wss-dn') {
+      const v = $('#wss-dn').value.trim();
+      if (!v) { toast('显示名不能为空'); return; }
+      await api('/api/subs/' + id, 'POST', { display_name: v });
+      await loadSubs();
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      toast('已保存');
+      renderSettings();
+      openWssIdentity(id);
+    }
+    else if (act === 'save-wss-pw') {
+      const v = $('#wss-pw').value;
+      if (v.length < 6) { toast('密码至少 6 位'); return; }
+      await api('/api/subs/' + id, 'POST', { password: v });
+      await loadSubs();
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
+      toast('密码已重设，旧连接会断开');
+      renderSettings();
+      openWssIdentity(id);
+    }
     else if (act === 'new-sub') {
       const dn = ($('#sub-dn-new') ? $('#sub-dn-new').value.trim() : '');
       const pass = $('#sub-pw-new').value;
       if (pass.length < 6) { toast('密码至少 6 位'); return; }
-      await api('/api/subs', 'POST', { display_name: dn || 'WSS 账号', password: pass });
-      toast('WSS 账号已创建');
+      await api('/api/subs', 'POST', { display_name: dn || '心夏', password: pass });
+      toast('已添加这个身份');
       await loadSubs();
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
       renderSettings();
     }
     else if (act === 'save-sub-dn') {
@@ -2793,9 +2889,10 @@ document.addEventListener('click', async (e) => {
       renderSettings();
     }
     else if (act === 'del-sub') {
-      if (!confirm('删除这个 WSS 账号？它的聊天记录会保留。')) return;
+      if (!confirm('删除这个 WSS 身份？它的聊天记录会保留。')) return;
       await api('/api/subs/' + id, 'DELETE');
       toast('已删除');
+      document.querySelectorAll('.mask').forEach((m) => m.remove());
       await loadSubs();
       renderSettings();
     }
@@ -2813,6 +2910,7 @@ document.addEventListener('click', async (e) => {
       applyMe(d.user);
       document.querySelectorAll('.mask').forEach((m) => m.remove());
       toast('显示名已保存');
+      if (S.view === 'settings') { await loadSubs(); renderSettings(); }
       if (S.view === 'settings') openSettings();
     }
     else if (act === 'save-pw') {
@@ -2823,6 +2921,7 @@ document.addEventListener('click', async (e) => {
       });
       toast('密码已修改');
       document.querySelectorAll('.mask').forEach((m) => m.remove());
+      if (S.view === 'settings') { await loadSubs(); renderSettings(); }
     }
     else if (act === 'create-group') {
       const title = $('#g-title').value.trim() || '新群聊';

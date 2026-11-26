@@ -115,7 +115,8 @@ def api_login(c):
     password = str(c.arg("password"))
     if not username or not password:
         raise ApiError("请输入账号和密码")
-    user, msg = auth.authenticate(username, password)
+    # HTTP 登录只认主账号：WSS 子账号只走专有协议，不能拿它登网页
+    user, msg = auth.authenticate(username, password, allow_sub=False)
     if user is None:
         raise ApiError(msg or "登录失败", 401)
     token = auth.create_session(user["id"])
@@ -142,7 +143,6 @@ def _full_user(c, user):
     data["email"] = user["email"] or ""
     data["parent_id"] = user["parent_id"]
     data["is_admin"] = store.is_admin(user)
-    data["legacy_channels"] = list(config.LEGACY_CHANNELS) if store.is_admin(user) else []
     return data
 
 
@@ -211,15 +211,33 @@ def _save_upload(raw, user_id, kind):
 
 @route("POST", "/api/avatar")
 def api_avatar(c):
-    """接收前端裁好的方图（尽量 webp），落盘后把头像指过去。"""
+    """接收前端裁好的方图（尽量 webp），落盘后把头像指过去。
+
+    带 sub_id 时改的是自己的 WSS 子身份头像（主身份就是自己，不用带）。
+    """
     user = c.need_login()
-    stored = _save_upload(c.arg("data"), user["id"], "avatar")
-    old = str(user["avatar"] or "")
-    db.run("UPDATE users SET avatar = ? WHERE id = ?", (stored, user["id"]))
+    target = user
+    sub_id = int(c.arg("sub_id") or 0)
+    if sub_id and sub_id != int(user["id"]):
+        row = db.qone(
+            "SELECT * FROM users WHERE id = ? AND parent_id = ? AND is_sub = 1",
+            (sub_id, user["id"]),
+        )
+        if row is None:
+            raise ApiError("WSS 身份不存在", 404)
+        target = row
+    stored = _save_upload(c.arg("data"), int(target["id"]), "avatar")
+    old = str(target["avatar"] or "")
+    db.run("UPDATE users SET avatar = ? WHERE id = ?", (stored, target["id"]))
     if old != stored:
         _drop_upload_file(old, AVATAR_DIR)
-    fresh = db.qone("SELECT * FROM users WHERE id = ?", (user["id"],))
-    return ok(user=_full_user(c, fresh), url=stored)
+    fresh = db.qone("SELECT * FROM users WHERE id = ?", (target["id"],))
+    if int(target["id"]) == int(user["id"]):
+        return ok(user=_full_user(c, fresh), url=stored)
+    return ok(sub={"id": int(target["id"]),
+                    "display_name": fresh["display_name"] or "WSS 账号",
+                    "username": user["username"],
+                    "avatar": fresh["avatar"] or ""}, url=stored)
 
 
 @route("POST", "/api/cover")
@@ -380,22 +398,15 @@ def api_create_conversation(c):
         ids = [int(x) for x in (c.arg("member_ids") or []) if str(x).isdigit()]
         if store.is_sub(user):
             raise ApiError("子账号不能建群")
-        # 只能拉好友进群
+        # 只能拉好友进群；子账号不进群
         safe = []
         for pid in ids:
+            if store.is_sub(db.qone("SELECT * FROM users WHERE id = ?", (pid,))):
+                continue
             if store.are_friends(user["id"], pid) and pid != user["id"]:
                 safe.append(pid)
         cid = store.create_group(user["id"], title, safe)
         c.notify_conv(cid, {"type": "conversation", "conv_id": cid})
-        return ok(conv_id=cid)
-
-    if kind == "legacy":
-        # 只有管理员能开 legacy 频道
-        if not store.is_admin(user):
-            raise ApiError("只有管理员能使用旧频道", 403)
-        cid = int(c.arg("channel") or 1)
-        if str(cid) not in config.LEGACY_CHANNELS:
-            raise ApiError("频道不存在")
         return ok(conv_id=cid)
 
     raise ApiError("不支持的会话类型")
@@ -524,6 +535,9 @@ def api_members(c):
         raise ApiError("只有群主或群管理员能管理成员", 403)
     for pid in c.arg("add") or []:
         pid = int(pid)
+        # 子账号只能跟主账号私聊，不能进群
+        if store.is_sub(db.qone("SELECT * FROM users WHERE id = ?", (pid,))):
+            continue
         if store.are_friends(user["id"], pid):
             store.add_member(cid, pid)
     for pid in c.arg("remove") or []:
@@ -964,8 +978,16 @@ def api_push_test(c):
 
 @route("GET", "/api/subs")
 def api_subs(c):
-    """WSS 账号：用户名跟主账号共用，只对外暴露显示名。"""
+    """WSS 账号 = 依附在本主账号下面的那个独立子账号。
+
+    - 用户名跟主账号共用（库里是隐藏名 ~sub:xxx），对外只暴露显示名和头像
+    - 每个主账号最多一个
+    - 只能走 WSS 专有协议，不能用于 HTTP 登录
+    """
     user = c.need_login()
+    if store.is_sub(user):
+        # 子账号自己不能再有 WSS 账号
+        return ok(subs=[], can_create=False, login_user=user["username"])
     rows = db.qall(
         "SELECT * FROM users WHERE parent_id = ? AND is_sub = 1 ORDER BY id",
         (user["id"],),
@@ -975,13 +997,15 @@ def api_subs(c):
             "id": int(r["id"]),
             "display_name": r["display_name"] or "WSS 账号",
             "username": user["username"],           # 共用主账号用户名
+            "avatar": r["avatar"] or "",
             "created_at": int(r["created_at"] or 0),
+            "is_self": 0,
         }
         for r in rows
     ]
     return ok(
         subs=subs,
-        can_create=(not store.is_sub(user)) and len(subs) == 0,
+        can_create=len(subs) == 0,
         login_user=user["username"],
     )
 
@@ -994,7 +1018,8 @@ def api_create_sub(c):
     if db.qone("SELECT 1 FROM users WHERE parent_id = ? AND is_sub = 1", (user["id"],)):
         raise ApiError("已经有 WSS 账号了，在设置里改密码就行")
     password = str(c.arg("password") or "")
-    display = str(c.arg("display_name") or "WSS 账号").strip()[:30]
+    # 子账号默认跟「心夏」会话同名、同头像（头像留空，前端回退到站点 ICON）
+    display = str(c.arg("display_name") or "").strip()[:30] or store.PKN_TITLE
     if len(password) < 6:
         raise ApiError("密码至少 6 位")
 
@@ -1002,10 +1027,11 @@ def api_create_sub(c):
     hidden = "~sub:%d-%s" % (user["id"], secrets.token_hex(3))
     uid = auth.create_user(hidden, password, role="user", is_sub=1,
                            parent_id=user["id"], display_name=display)
-    cid = store.get_or_create_dm(user["id"], uid)
+    # 绑回主账号那条已有的「心夏」，和网页端同一条会话互通
+    cid = store.get_or_create_pkn(uid)
     HUB.push_user(user["id"], {"type": "conversation", "conv_id": cid})
     return ok(
-        sub={"id": uid, "display_name": display, "username": user["username"]},
+        sub={"id": uid, "display_name": display, "username": user["username"], "avatar": ""},
         conv_id=cid,
     )
 
@@ -1027,6 +1053,15 @@ def api_update_sub(c):
             raise ApiError("显示名不能为空")
         db.run("UPDATE users SET display_name = ? WHERE id = ?", (name, sid))
 
+    if c.arg("avatar") is not None:
+        av = str(c.arg("avatar") or "")[:200]
+        if av and not (av.startswith("av:") and "/" not in av[3:] and ".." not in av)                 and not re.match(r"^https?://", av):
+            raise ApiError("头像地址不合法")
+        old_av = str(row["avatar"] or "")
+        db.run("UPDATE users SET avatar = ? WHERE id = ?", (av, sid))
+        if old_av and old_av != av:
+            _drop_upload_file(old_av, AVATAR_DIR)
+
     pw = str(c.arg("password") or "")
     if pw:
         if len(pw) < 6:
@@ -1039,6 +1074,7 @@ def api_update_sub(c):
         "id": sid,
         "display_name": fresh["display_name"] or "WSS 账号",
         "username": user["username"],
+        "avatar": fresh["avatar"] or "",
     })
 
 

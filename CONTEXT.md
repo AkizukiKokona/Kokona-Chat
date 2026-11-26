@@ -40,11 +40,22 @@ kokonachat/
    - 头像：`POST /api/avatar`，256×256，存 `data/avatars/`，`users.avatar = av:<文件名>`
    - 封面：`POST /api/cover`，720×480，存 `data/covers/`，`users.cover = cv:<文件名>`
    渲染拼 `BASE + '/avatar|cover/' + 文件名`；没设时头像回退站点头像/名字首字，封面回退棕色渐变。
-8. **子账号（WSS）没有独立用户名**：库里存隐藏名 `~sub:<id>`，对外一律用
-   「主账号用户名 + 子账号密码」登录（`auth._match_sub`）。每个账号最多一个，
-   只能改显示名和密码，不能改用户名。入口只在「设置 → WSS 账号」。
-9. **PKN 会接管「只有自己」的 legacy 会话**（`store.get_or_create_pkn`），
-   所以旧「频道一」就是账号的专属 WSS 聊天，不会再额外建一条导致列表出现两个。
+8. **WSS 账号 = 依附主账号的独立子账号**（`is_sub=1`），依附关系靠 `parent_id`。
+   - 不是主账号自带的，要去「设置 → WSS 身份」主动开通；每个主账号**有且只有一个**，
+     删了可以再开。库里存隐藏名 `~sub:<id>-<随机>`，**不对外暴露、不参与登录**。
+   - 登录 = 「**主账号用户名 + 子账号密码**」（`auth._match_sub`）。
+     **HTTP 登录走 `authenticate(..., allow_sub=False)`，子账号拒登**；只允许 WSS 专有协议。
+   - **子账号密码绝不能和主账号相同**：登录时主账号密码先匹配，同密码会命中主账号、
+     子账号永远连不上。初始密码要与主账号不同，用户可在设置里改。
+   - 只能和主账号私聊，不能加好友 / 建群 / 被拉进群（建群与加成员处都过滤 `is_sub`）。
+   - 显示名默认 `store.PKN_TITLE`（心夏），头像留空 → 前端回退站点 ICON，
+     跟「心夏」会话一致；名字、头像、密码都能独立改，不影响主账号。
+9. **子账号的 `pkn.hello` 绑回主账号已有的那条「心夏」会话**（`store.get_or_create_pkn`：
+   子账号 → `get_or_create_pkn(parent)`，并把自己加进 `conversation_members`）。
+   **不能再 `get_or_create_dm(parent, sub)` 新建一条**——那样网页和 WSS 会各看到一条。
+   加成员是关键：`push_conversation` 按 `member_ids` 广播，不加则子账号收不到网页消息、
+   自己的消息也回不来。`main` 的「心夏」会话同样会被 PKN 接管「只有自己」的 legacy 会话，
+   不会多出第二条。
 
 ## 界面结构（别改回去）
 

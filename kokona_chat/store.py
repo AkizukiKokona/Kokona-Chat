@@ -721,7 +721,18 @@ def get_or_create_pkn(user_id):
         parent = int(row["parent_id"] or 0)
         if parent == 0:
             return None
-        return get_or_create_dm(parent, row["id"])
+        # 子账号绑回主账号那条已有的「心夏」会话，和网页端在同一条里互通。
+        # 必须把自己加进成员表：这样它发的消息才会广播回自己的 WSS 连接，
+        # 主账号在网页发的消息也才会推给它（push_conversation 按 member_ids 走）。
+        cid = get_or_create_pkn(parent)
+        if cid is None:
+            return None
+        t = db.now()
+        db.run(
+            "INSERT OR IGNORE INTO conversation_members (conv_id, user_id, joined_at) VALUES (?, ?, ?)",
+            (cid, int(user_id), t),
+        )
+        return cid
 
     key = "pkn:%d" % int(user_id)
     hit = db.qone("SELECT id FROM conversations WHERE dm_key = ?", (key,))
