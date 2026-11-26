@@ -124,6 +124,12 @@ kokonachat/
 - 长按消息弹的是贴着气泡的浮层 `.msg-menu`（深色圆角 + 下箭头，`position:fixed` 按气泡中心算位置，
   贴顶时翻到下方）。**不要再改回 `openSheet` 底部弹层**。菜单项按情况给「撤回 / 选择文本 / 删除 / 存表情」，
   点别处、滚动、改窗口大小都会收起；`menuOpenedAt` 用来压掉长按之后那次点击的时间 toast。
+- 首页右上角「＋」用 `.pop-menu`：和长按菜单**同一副外观**（深色圆角 + 尖角），排成上下列表，
+  右边缘贴住按钮、默认向下弹。**不要再用 `openSheet` 铺遮罩**——那个是居中大弹窗，太重。
+  `.pop-menu` 必须是独立类名，别复用到 `.msg-menu`：`closeMsgMenu()` 会 `$$('.msg-menu')` 全删，
+  同名会导致「点加号想收起，结果先被删再被重开」。再点一次加号 = 收起（toggle）。
+  量宽度用 `offsetWidth`：进场动画有 `scale(.96)`，`getBoundingClientRect()` 会量成缩放后尺寸，
+  右边缘会差几个像素。
 - UI 文案不写括号解释。「删除」就是删除，不带「只删我这边」这类说明。
 - 站点名统一「心夏通讯」（`_doc` 标题、发件名 `CHAT_MAIL_NAME`、推送兜底标题）。
 - 消息里的文字默认不可选（`.row` 上 `user-select:none` + `-webkit-touch-callout:none`），

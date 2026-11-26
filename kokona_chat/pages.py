@@ -156,16 +156,19 @@ body.kb-tight .composer textarea{min-height:34px;padding:6px 10px}
   color:var(--text);background:transparent}
 .tray-big .ic{width:54px;height:54px;border-radius:14px;background:var(--soft);
   display:flex;align-items:center;justify-content:center;color:var(--brand)}
-.msg-menu{position:fixed;z-index:88;display:flex;align-items:stretch;padding:3px;
+.msg-menu,.pop-menu{position:fixed;z-index:88;display:flex;align-items:stretch;padding:3px;
   background:#2f2a25;border-radius:11px;box-shadow:0 8px 26px rgba(0,0,0,.28);
   animation:menu-in .13s ease-out}
 @keyframes menu-in{from{opacity:0;transform:translateY(4px) scale(.96)}to{opacity:1;transform:none}}
-.msg-menu button{appearance:none;border:0;background:none;color:#f4ede1;font:inherit;font-size:13px;
+.msg-menu button,.pop-menu button{appearance:none;border:0;background:none;color:#f4ede1;font:inherit;font-size:13px;
   line-height:1;padding:10px 13px;border-radius:8px;white-space:nowrap}
-.msg-menu button:active{background:rgba(255,255,255,.13)}
-.msg-menu .caret{position:absolute;bottom:-5px;left:var(--caret,50%);margin-left:-5px;
+.msg-menu button:active,.pop-menu button:active{background:rgba(255,255,255,.13)}
+.msg-menu .caret,.pop-menu .caret{position:absolute;bottom:-5px;left:var(--caret,50%);margin-left:-5px;
   width:10px;height:10px;background:#2f2a25;transform:rotate(45deg);border-radius:2px}
-.msg-menu.below .caret{bottom:auto;top:-5px}
+.msg-menu.below .caret,.pop-menu.below .caret{bottom:auto;top:-5px}
+/* 首页「＋」的菜单：和长按气泡同一副外观，只是排成上下列表（轻浮层，不铺遮罩） */
+.pop-menu{flex-direction:column;align-items:stretch;min-width:142px;padding:4px}
+.pop-menu button{text-align:left;padding:12px 14px;font-size:14px;line-height:1.2}
 .tray-tip{color:var(--sub);font-size:12px;text-align:center;padding:16px 8px;line-height:1.7}
 .cmb:active{color:var(--brand)}
 .bubble.img{padding:4px;background:transparent;box-shadow:none;max-width:min(72%,240px)}
@@ -1742,6 +1745,44 @@ function closeMsgMenu() {
   $$('.msg-menu').forEach((el) => el.remove());
 }
 
+function closePopMenu() {
+  $$('.pop-menu').forEach((el) => el.remove());
+}
+
+/** 贴着按钮弹出的上下列表，外观复用长按气泡那套深色浮层。 */
+function openPopMenu(anchor, items) {
+  closePopMenu();
+  if (!anchor) return;
+  const box = document.createElement('div');
+  box.className = 'pop-menu';
+  box.innerHTML = items.map((it) => '<button data-act="' + it[0] + '">' + it[1] + '</button>').join('')
+    + '<i class="caret"></i>';
+  document.body.appendChild(box);
+
+  const b = anchor.getBoundingClientRect();
+  // 用 offsetWidth/offsetHeight：进场动画带 scale(.96)，getBoundingClientRect 会量到缩放后的尺寸，
+  // 右边缘就会差几个像素（这个坑长按菜单里也有，只是居中看着不明显）
+  const mw = box.offsetWidth;
+  const mh = box.offsetHeight;
+  const pad = 8;
+  // 右边缘贴住按钮，空间不够再往左推
+  let left = b.right - mw;
+  left = Math.min(Math.max(left, pad), window.innerWidth - mw - pad);
+  // 按钮在顶部，正常情况下往下展开；下面放不下才翻上去
+  let top = b.bottom + 9;
+  let below = true;
+  if (top + mh > window.innerHeight - pad) {
+    top = b.top - mh - 9;
+    below = false;
+  }
+  top = Math.max(top, pad);
+  box.classList.toggle('below', below);
+  box.style.left = left + 'px';
+  box.style.top = top + 'px';
+  const cx = Math.min(Math.max(b.left + b.width / 2 - left, 14), mw - 14);
+  box.style.setProperty('--caret', cx + 'px');
+}
+
 /** 长按气泡：贴着气泡弹出的小菜单，微信那套。 */
 function openMsgMenu(mid) {
   const m = msgById(mid);
@@ -2510,13 +2551,14 @@ document.addEventListener('click', (e) => {
 /* 菜单外点一下、列表一滚，就收起来；顺便退出文字选择态 */
 document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('.msg-menu')) closeMsgMenu();
+  if (!e.target.closest('.pop-menu') && !e.target.closest('[data-act="plus"]')) closePopMenu();
   if (!e.target.closest('.at-pop')) closeAtPop();
   if (!e.target.closest('.row.selectable')) {
     $$('.row.selectable').forEach((el) => el.classList.remove('selectable'));
   }
 }, true);
 
-window.addEventListener('resize', closeMsgMenu);
+window.addEventListener('resize', () => { closeMsgMenu(); closePopMenu(); });
 
 /* 触摸按压态用 class 控制，避免移动端 :active 黏在那一行 */
 document.addEventListener('pointerdown', (e) => {
@@ -2650,14 +2692,13 @@ document.addEventListener('click', async (e) => {
     else if (act === 'send') { sendMsg(); }
     else if (act === 'chat-setting') { chatSetting(); }
     else if (act === 'plus') {
-      openSheet('新建',
-        '<div class="card" style="margin:0">'
-        + '<div class="item" data-act="new-group"><div class="txt"><div class="t1">发起群聊</div></div><span class="arrow">›</span></div>'
-        + '<div class="item" data-act="go-search"><div class="txt"><div class="t1">加好友</div></div><span class="arrow">›</span></div>'
-        + '</div>', '');
+      // 再点一次同一个加号就收起来，跟长按菜单一样是轻浮层，不铺遮罩
+      if (document.querySelector('.pop-menu')) { closePopMenu(); }
+      else openPopMenu(el, [['new-group', '发起群聊'], ['go-search', '加好友']]);
     }
-    else if (act === 'new-group') { document.querySelectorAll('.mask').forEach((m) => m.remove()); newGroup(); }
+    else if (act === 'new-group') { closePopMenu(); document.querySelectorAll('.mask').forEach((m) => m.remove()); newGroup(); }
     else if (act === 'go-search') {
+      closePopMenu();
       document.querySelectorAll('.mask').forEach((m) => m.remove());
       await loadFriends();
       showAddFriend();
